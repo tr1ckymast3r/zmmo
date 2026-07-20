@@ -27,17 +27,29 @@ zmmo/
 
 ## Quick Start
 
+### Panel (Web UI)
 ```bash
-# Install frontend deps
 npm install
-
-# Start panel (dev)
-npm run dev
-
-# Build & run agent
-npm run agent:build
-./packages/manager-agent/manager-agent
+npm run dev          # → http://localhost:3013
 ```
+
+### Agent (Backend)
+Pre-built binaries in `assets/`:
+
+| Platform | Binary |
+|----------|--------|
+| **Windows (x64)** | `assets/zmmo-agent-windows-amd64.exe` |
+| **macOS (Intel)** | `assets/zmmo-agent-darwin-amd64` |
+| **macOS (Apple Silicon)** | `assets/zmmo-agent-darwin-arm64` |
+| **Linux (x64)** | `assets/zmmo-agent-linux-amd64` |
+
+Or build from source:
+```bash
+cd packages/manager-agent
+./build.sh
+```
+
+Agent listens on **port 55555** (auto-fallback 55556). Panel auto-connects on page load.
 
 ## API Contract
 
