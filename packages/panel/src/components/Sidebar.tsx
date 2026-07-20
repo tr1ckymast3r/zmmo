@@ -45,7 +45,7 @@ export function Sidebar({ open, devices, selectedId, onSelect, loading }: Sideba
         )}
       </div>
 
-      <ScrollArea className="h-[calc(100vh-7rem)]">
+      <ScrollArea className="h-[calc(100vh-10rem)]">
         {loading ? (
           <div className="p-4 space-y-2">
             {[1, 2, 3].map((i) => (
@@ -98,6 +98,19 @@ export function Sidebar({ open, devices, selectedId, onSelect, loading }: Sideba
           </div>
         )}
       </ScrollArea>
+
+      {/* Footer nav */}
+      <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-zinc-800 bg-zinc-950/95">
+        <a
+          href="/downloads"
+          className="flex items-center gap-2 text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Downloads
+        </a>
+      </div>
     </aside>
   );
 }
