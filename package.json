@@ -1,0 +1,15 @@
+{
+  "name": "zmmo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZMMO — Android Device Identity Management Suite (Monorepo)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/panel",
+    "build": "npm run build --workspace=packages/panel",
+    "agent:build": "cd packages/manager-agent && go build -o manager-agent .",
+    "agent:dev": "cd packages/manager-agent && go run ."
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+.next/
+*.exe
+*.exe~
+manager-agent/manager-agent
+packages/manager-agent/manager-agent
+backups/
+.env
+.env.local
+dist/
+.turbo/

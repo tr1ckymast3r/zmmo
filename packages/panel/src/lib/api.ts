@@ -1,0 +1,116 @@
+// API client for manager-agent backend (localhost:55555 / :55556)
+
+import type { AgentStatus, DeviceInfo, DeviceProps, Task, BackupInfo } from "@/types/device";
+
+const AGENT_PORTS = [55555, 55556];
+let activePort: number | null = null;
+
+async function detectPort(): Promise<number> {
+  if (activePort) return activePort;
+  for (const port of AGENT_PORTS) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/status`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        activePort = port;
+        return port;
+      }
+    } catch {}
+  }
+  throw new Error("Agent not running on any port (55555, 55556)");
+}
+
+async function apiCall<T>(path: string, options?: RequestInit): Promise<T> {
+  const port = await detectPort();
+  const url = `http://127.0.0.1:${port}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    signal: options?.signal ?? AbortSignal.timeout(15000),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "Unknown error");
+    throw new Error(`API ${res.status}: ${err}`);
+  }
+  return res.json();
+}
+
+// ── Agent Status ──
+export async function getAgentStatus(): Promise<AgentStatus> {
+  return apiCall<AgentStatus>("/status");
+}
+
+// ── Devices ──
+export async function getDevices(): Promise<DeviceInfo[]> {
+  return apiCall<DeviceInfo[]>("/devices");
+}
+
+export async function getDevice(id: string): Promise<DeviceInfo> {
+  return apiCall<DeviceInfo>(`/devices/${id}`);
+}
+
+export async function updateDeviceProps(id: string, props: Partial<DeviceProps>): Promise<{ ok: boolean }> {
+  return apiCall(`/devices/${id}/props`, {
+    method: "PUT",
+    body: JSON.stringify({ props }),
+  });
+}
+
+export async function applyDeviceProps(id: string): Promise<{ ok: boolean }> {
+  return apiCall(`/devices/${id}/apply`, { method: "POST" });
+}
+
+// ── Tasks (ADB, backup, restore, license...) ──
+export async function getTasks(): Promise<Task[]> {
+  return apiCall<Task[]>("/tasks");
+}
+
+export async function createTask(type: Task["type"], deviceId?: string, params?: Record<string, string>): Promise<Task> {
+  return apiCall<Task>("/tasks", {
+    method: "POST",
+    body: JSON.stringify({ type, deviceId, params: params ?? {} }),
+  });
+}
+
+export async function getTask(id: string): Promise<Task> {
+  return apiCall<Task>(`/tasks/${id}`);
+}
+
+// ── Backups ──
+export async function getBackups(): Promise<BackupInfo[]> {
+  return apiCall<BackupInfo[]>("/backups");
+}
+
+export async function createBackup(deviceId: string, props: DeviceProps): Promise<BackupInfo> {
+  return apiCall<BackupInfo>("/backups", {
+    method: "POST",
+    body: JSON.stringify({ deviceId, props }),
+  });
+}
+
+export async function restoreBackup(backupId: string, deviceId: string): Promise<{ ok: boolean }> {
+  return apiCall(`/backups/${backupId}/restore`, {
+    method: "POST",
+    body: JSON.stringify({ deviceId }),
+  });
+}
+
+// ── License ──
+export async function activateLicense(key: string): Promise<{ ok: boolean; message: string }> {
+  return apiCall("/license/activate", {
+    method: "POST",
+    body: JSON.stringify({ key }),
+  });
+}
+
+// ── ADB Commands ──
+export async function adbCommand(deviceId: string, command: string): Promise<{ output: string }> {
+  return apiCall(`/adb/${deviceId}`, {
+    method: "POST",
+    body: JSON.stringify({ command }),
+  });
+}
+
+// ── Utility: reset active port (when agent restarts) ──
+export function resetPort() {
+  activePort = null;
+}
