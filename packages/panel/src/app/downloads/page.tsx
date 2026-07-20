@@ -80,7 +80,7 @@ export default function DownloadsPage() {
           {DOWNLOADS.map((d) => (
             <a
               key={d.file}
-              href={`/downloads/${d.file}`}
+              href={`/agent-binaries/${d.file}`}
               download={d.file}
               className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 transition-all group"
             >
