@@ -36,31 +36,81 @@ ro_build_version_incremental=$(grep "^ro.build.version.incremental=" "$BUILD_PRO
 ro_build_description=$(grep "^ro.build.description=" "$BUILD_PROP" | cut -d= -f2- || echo "unknown")
 ro_lineage_version=$(grep "^ro.lineage.version=" "$BUILD_PROP" | cut -d= -f2- || echo "")
 ro_cm_version=$(grep "^ro.cm.version=" "$BUILD_PROP" | cut -d= -f2- || echo "")
+ro_board_platform=$(grep "^ro.board.platform=" "$BUILD_PROP" | cut -d= -f2- || echo "")
+ro_hardware=$(grep "^ro.hardware=" "$BUILD_PROP" | cut -d= -f2- || echo "")
 
-# --- Detect device family ---
+# --- Detect device family and chip variant ---
 DEVICE_FAMILY="generic"
+CHIP_VARIANT=""
 
-# Pixel detection
+# Pixel detection (brand=google)
 if echo "$ro_build_fingerprint" | grep -qiE "google/(sailfish|marlin|taimen|walleye|crosshatch|blueline|bonito|sargo|coral|flame|sunfish|bramble|redfin|barbet|oriole|raven|bluejay|panther|cheetah|lynx|tangorpro|felix|shiba|husky|akita|tokay|caiman|komodo)" ; then
     DEVICE_FAMILY="pixel"
 fi
 
-# Samsung Exynos detection
-if echo "$ro_build_fingerprint" | grep -qiE "samsung/(dreamlte|dream2lte|greatlte|starqlte|star2qlte|crownqlte|beyond0qlte|beyond1qlte|beyond2qlte|beyondx|d1|d2s|d2x|r8q|x1q|y2q|z3q)" ; then
-    DEVICE_FAMILY="samsung-exynos"
-fi
-# Samsung codenames sometimes differ
-if echo "$ro_product_device" | grep -qiE "^(dreamlte|dream2lte|greatlte|starqlte|star2qlte|crownqlte|beyond0qlte|beyond1qlte|beyond2qlte|beyondx|d1|d2s|d2x|r8q|x1q|y2q|z3q)$" ; then
-    DEVICE_FAMILY="samsung-exynos"
-fi
-# Check board/platform for Exynos
-if echo "$ro_product_board" | grep -qiE "universal[0-9]+|exynos[0-9]+" ; then
-    DEVICE_FAMILY="samsung-exynos"
+# Google Tensor detection (Pixel 6+) — overrides pixel to pixel-tensor
+if echo "$ro_board_platform" | grep -qiE "gs101|gs201|gs301|gs401|tensor" ; then
+    DEVICE_FAMILY="pixel"
 fi
 
-# Google Tensor detection (Pixel 6+)
-if echo "$ro_product_board" | grep -qiE "gs101|gs201|gs301|tensor" ; then
-    DEVICE_FAMILY="pixel"
+# === Samsung detection (brand=samsung) ===
+if echo "$ro_product_brand" | grep -qi "samsung" || echo "$ro_build_fingerprint" | grep -qi "samsung/" ; then
+    
+    # --- Determine Samsung chip variant ---
+    # Priority: ro.board.platform > ro.hardware > codename pattern > model
+    
+    # Exynos — board platform contains "universal" or "exynos"
+    if echo "$ro_board_platform" | grep -qiE "universal[0-9]+|exynos[0-9]+" ; then
+        DEVICE_FAMILY="samsung-exynos"
+    
+    # Snapdragon — board platform contains "sdm" "msm" "sm" "qcom" "kona" "lahaina" "taro" "kalama" "pineapple"
+    elif echo "$ro_board_platform" | grep -qiE "^(sdm|msm|sm|apq|qcom)|kona|lahaina|taro|kalama|pineapple|waipio|palima|monaco" ; then
+        DEVICE_FAMILY="samsung-snapdragon"
+    
+    # MediaTek — board platform starts with "mt"
+    elif echo "$ro_board_platform" | grep -qiE "^mt[0-9]+" ; then
+        DEVICE_FAMILY="samsung-mediatek"
+    
+    # Fallback: codename pattern — "qlte" suffix = Qualcomm/Snapdragon
+    elif echo "$ro_product_device" | grep -qiE "q(lte|w)" ; then
+        # starqlte, beyond0qlte, d1q, d2q, etc.
+        if echo "$ro_board_platform" | grep -qiE "universal|exynos" 2>/dev/null; then
+            DEVICE_FAMILY="samsung-exynos"  # some codenames use q for quad not qualcomm
+        else
+            DEVICE_FAMILY="samsung-snapdragon"
+        fi
+    
+    # Fallback: check ro.hardware for chip hints
+    elif echo "$ro_hardware" | grep -qiE "qcom|sdm|msm|kona|lahaina|taro|kalama" ; then
+        DEVICE_FAMILY="samsung-snapdragon"
+    elif echo "$ro_hardware" | grep -qiE "exynos|universal|samsungexynos" ; then
+        DEVICE_FAMILY="samsung-exynos"
+    elif echo "$ro_hardware" | grep -qiE "^mt[0-9]+" ; then
+        DEVICE_FAMILY="samsung-mediatek"
+    
+    # Last resort: known Exynos codenames (no 'q' before 'lte')
+    elif echo "$ro_product_device" | grep -qiE "^(dreamlte|dream2lte|greatlte|crownlte|starlte|star2lte|beyond0lte|beyond1lte|beyond2lte|d1|d2s|d2x)$" ; then
+        DEVICE_FAMILY="samsung-exynos"
+    
+    # Known Snapdragon codenames (has 'q' before 'lte')
+    elif echo "$ro_product_device" | grep -qiE "^(dreamqlte|starqlte|star2qlte|crownqlte|beyond0qlte|beyond1qlte|beyond2qlte|d1q|d2q|winner|winners)$" ; then
+        DEVICE_FAMILY="samsung-snapdragon"
+    
+    # Newer models (S20+): x1q/x1s = S20, y2q/y2s = S20+, z3q = S20 Ultra
+    elif echo "$ro_product_device" | grep -qiE "^(x1q|x1s|y2q|y2s|z3q|r8q|r8s)$" ; then
+        # These can be either Exynos or Snapdragon depending on region
+        # Check model number: SM-G98* = Exynos, SM-G98*U = Snapdragon
+        if echo "$ro_product_model" | grep -qiE "SM-G[0-9]+U|SM-G[0-9]+W|SCG[0-9]+|SC-[0-9]+" ; then
+            DEVICE_FAMILY="samsung-snapdragon"
+        else
+            DEVICE_FAMILY="samsung-exynos"
+        fi
+    
+    else
+        # Unknown Samsung — default to generic but log the board
+        echo "  ⚠ Unknown Samsung variant: device=$ro_product_device board=$ro_board_platform hardware=$ro_hardware" >&2
+        DEVICE_FAMILY="samsung-unknown"
+    fi
 fi
 
 # --- Detect Android version ---
@@ -118,6 +168,8 @@ cat << JSON
   "device": "$ro_product_device",
   "board": "$ro_product_board",
   "cpu_abi": "$ro_product_cpu_abi",
+  "platform": "$ro_board_platform",
+  "hardware": "$ro_hardware",
   "fingerprint": "$ro_build_fingerprint",
   "build_id": "$ro_build_version_incremental",
   "lineage_version": "$ro_lineage_version"

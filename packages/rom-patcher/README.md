@@ -8,26 +8,39 @@
 |--------------|-----------|---------|--------|-------|
 | **Pixel 2-5** (Snapdragon) | 18.1–21 | 11–14 | ✅ Full | Closest to AOSP, patches apply cleanly |
 | **Pixel 6-9** (Tensor) | 20–22 | 13–15 | ✅ Full | VDEX-only, CarrierConfig bypass needed |
-| **Samsung S8** (Exynos 8895) | 18.1–20 | 10–13 | ✅ Full | `dreamlte/dream2lte` |
-| **Samsung S9** (Exynos 9810) | 19.1–21 | 10–14 | ✅ Full | `starlte/star2lte`, SamsungRIL hooks |
-| **Samsung S10** (Exynos 9820) | 20–21 | 12–14 | ✅ Full | `beyond0lte/beyond1lte/beyond2lte` |
-| **Samsung S20** (Exynos 990) | 21 | 13–14 | ⚠️ Partial | `x1q`, RIL changes in Android 13+ |
+| **Samsung S8** (Exynos) | 18.1–20 | 10–13 | ✅ Full | `dreamlte`, SamsungRIL hooks |
+| **Samsung S8** (Snapdragon) | 18.1–20 | 10–13 | ✅ Full | `dreamqlte`, common AOSP patches only |
+| **Samsung S9** (Exynos) | 19.1–21 | 10–14 | ✅ Full | `starlte`, SamsungRIL hooks |
+| **Samsung S9** (Snapdragon) | 19.1–21 | 10–14 | ✅ Full | `starqlte`, common AOSP patches only |
+| **Samsung S10** (Exynos) | 20–21 | 12–14 | ✅ Full | `beyond0lte`, SamsungRIL hooks |
+| **Samsung S10** (Snapdragon) | 20–21 | 12–14 | ✅ Full | `beyond0qlte`, common AOSP patches only |
+| **Samsung S20** (Exynos) | 21 | 13–14 | ⚠️ Partial | `x1q`, RIL changes in Android 13+ |
+| **Samsung S20** (Snapdragon) | 21 | 13–14 | ✅ Full | `x1q` US, common AOSP patches |
+| **Samsung A/M series** (Mediatek) | Any | 10–14 | ❌ Untested | Mediatek RIL differs from AOSP |
 | **Generic AOSP** | Any | 10–14 | ✅ Full | Common patches target AOSP classes |
 | **Xiaomi/OnePlus** | Any | 10–14 | ⚠️ Untested | Should work if AOSP RILJ is used |
 | **MIUI/HyperOS** | N/A | 10–14 | ❌ Not supported | Uses MIUI-specific telephony framework |
 
+### Samsung Chip Detection
+
+| Chip | `ro.board.platform` | Region | RIL | Extra Hooks |
+|------|---------------------|--------|-----|-------------|
+| **Exynos** | `universal9810`, `exynos9820`, ... | EU/Asia | SamsungRIL + AOSP | ✅ SamsungRIL.smali |
+| **Snapdragon** | `sdm845`, `sm8150`, `kona`, ... | US/CN/HK | Qualcomm → AOSP | ❌ None needed |
+| **MediaTek** | `mt6765`, `mt6833`, ... | Budget models | Mediatek RIL | ❌ Not supported |
+
 ### Feature Support Per Device
 
-| Feature | Pixel | Samsung Exynos | Generic |
-|---------|-------|---------------|---------|
-| IMEI spoof (both slots) | ✅ | ✅ | ✅ |
-| IMSI spoof | ✅ | ✅ | ✅ |
-| ICCID spoof | ✅ | ✅ | ✅ |
-| Phone number spoof | ✅ | ✅ | ✅ |
-| Build.prop spoof (19 fields) | ✅ | ✅ | ✅ |
-| SIM operator spoof | ✅ | ⚠️ * | ✅ |
-| CarrierConfig bypass | ⚠️ ** | N/A | N/A |
-| SamsungRIL hooks | N/A | ✅ | N/A |
+| Feature | Pixel | Samsung Exynos | Samsung Snapdragon | Generic |
+|---------|-------|---------------|-------------------|---------|
+| IMEI spoof (both slots) | ✅ | ✅ | ✅ | ✅ |
+| IMSI spoof | ✅ | ✅ | ✅ | ✅ |
+| ICCID spoof | ✅ | ✅ | ✅ | ✅ |
+| Phone number spoof | ✅ | ✅ | ✅ | ✅ |
+| Build.prop spoof (19 fields) | ✅ | ✅ | ✅ | ✅ |
+| SIM operator spoof | ✅ | ⚠️ * | ✅ | ✅ |
+| CarrierConfig bypass | ⚠️ ** | N/A | N/A | N/A |
+| SamsungRIL hooks | N/A | ✅ | N/A | N/A |
 | SafetyNet/Play Integrity | ❌ | ❌ | ❌ |
 
 \* Samsung ServiceMode (*#0011#) may still show real operator  
