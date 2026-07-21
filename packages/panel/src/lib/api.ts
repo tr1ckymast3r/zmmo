@@ -110,6 +110,19 @@ export async function adbCommand(deviceId: string, command: string): Promise<{ o
   });
 }
 
+// ── Device Meta ──
+export async function getDeviceMeta(
+  deviceId: string
+): Promise<{ ok: boolean; found: boolean; path: string; meta?: import("@/types/device").DeviceMeta; message?: string }> {
+  return apiCall(`/devices/${deviceId}/meta`);
+}
+
+export async function refreshDeviceMeta(
+  deviceId: string
+): Promise<{ ok: boolean; path: string; meta: import("@/types/device").DeviceMeta }> {
+  return apiCall(`/devices/${deviceId}/refresh-meta`, { method: "POST" });
+}
+
 // ── Utility: reset active port (when agent restarts) ──
 export function resetPort() {
   activePort = null;

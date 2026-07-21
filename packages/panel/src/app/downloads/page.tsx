@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+const VERSION = "1.1.1";
+
 const DOWNLOADS = [
   {
     platform: "Windows",
@@ -55,6 +57,7 @@ export default function DownloadsPage() {
             </Link>
             <span className="text-zinc-500 text-sm hidden sm:inline">/</span>
             <span className="text-zinc-300 text-sm hidden sm:inline font-medium">Downloads</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 font-mono">v{VERSION}</span>
           </div>
 
           <Link
@@ -78,7 +81,7 @@ export default function DownloadsPage() {
           {DOWNLOADS.map((d) => (
             <a
               key={d.file}
-              href={`/agent-binaries/${d.file}`}
+              href={`/agent-binaries/${d.file}?v=${VERSION}`}
               download={d.file}
               className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 transition-all group"
             >

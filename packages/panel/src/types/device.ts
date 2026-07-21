@@ -102,3 +102,57 @@ export interface BackupInfo {
   props: DeviceProps;
   createdAt: string;
 }
+
+export interface DeviceMeta {
+  serial: string;
+  realSerial: string;
+  imei1: string;
+  imei2: string;
+  meid: string;
+  imsi1: string;
+  imsi2: string;
+  iccid1: string;
+  iccid2: string;
+  phoneNumber: string;
+  simOperator: string;
+  simCarrier: string;
+  simCountry: string;
+  brand: string;
+  model: string;
+  manufacturer: string;
+  deviceName: string;
+  productName: string;
+  device: string;
+  board: string;
+  hardware: string;
+  platform: string;
+  fingerprint: string;
+  buildId: string;
+  buildType: string;
+  buildTags: string;
+  osVersion: string;
+  sdkVersion: string;
+  incremental: string;
+  securityPatch: string;
+  bootloader: string;
+  radioBaseband: string;
+  displayDensity: string;
+  displayWidth: string;
+  displayHeight: string;
+  macWifi: string;
+  macBluetooth: string;
+  wifiSsid: string;
+  wifiBssid: string;
+  ipAddress: string;
+  androidId: string;
+  gsfId: string;
+  advertisingId: string;
+  timezone: string;
+  language: string;
+  cpuAbi: string;
+  totalRam: string;
+  internalSize: string;
+  rawProps: Record<string, string>;
+  collectedAt: string;
+  agentVer: string;
+}

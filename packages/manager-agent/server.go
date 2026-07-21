@@ -8,7 +8,9 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -129,12 +131,12 @@ var (
 	pollerStop   chan struct{}
 )
 
-const version = "1.1.0"
+const version = "1.1.1"
 
 // ── ADB Helpers ──
 
 func adbDevices() []string {
-	out, err := exec.Command("adb", "devices").Output()
+	out, err := cmdHide("adb", "devices").Output()
 	if err != nil {
 		return nil
 	}
@@ -145,15 +147,15 @@ func adbDevices() []string {
 		if l == "" || strings.HasPrefix(l, "*") {
 			continue
 		}
-		if strings.Contains(l, "\tdevice") {
-			serials = append(serials, strings.Split(l, "\t")[0])
+		if strings.Contains(l, "	device") {
+			serials = append(serials, strings.Split(l, "	")[0])
 		}
 	}
 	return serials
 }
 
 func adbShell(serial, cmd string) (string, error) {
-	out, err := exec.Command("adb", "-s", serial, "shell", cmd).Output()
+	out, err := cmdHide("adb", "-s", serial, "shell", cmd).Output()
 	return strings.TrimSpace(string(out)), err
 }
 
@@ -235,6 +237,381 @@ func readDeviceProps(serial string) DeviceProps {
 	}
 }
 
+// ── Device Meta (full ADB snapshot → ~/.zmmo/devices/<serial>/meta.json) ──
+
+// DeviceMeta holds a complete snapshot of every changeable property on the device.
+type DeviceMeta struct {
+	Serial     string `json:"serial"`     // ADB serial (transport id)
+	RealSerial string `json:"realSerial"` // ro.serialno or bootloader serial
+
+	// ── SIM / Telephony ──
+	IMEI1        string `json:"imei1"`
+	IMEI2        string `json:"imei2"`
+	MEID         string `json:"meid"`
+	IMSI1        string `json:"imsi1"`
+	IMSI2        string `json:"imsi2"`
+	ICCID1       string `json:"iccid1"`
+	ICCID2       string `json:"iccid2"`
+	PhoneNumber  string `json:"phoneNumber"`
+	SIMOperator  string `json:"simOperator"`  // MCC+MNC
+	SIMCarrier   string `json:"simCarrier"`   // friendly name
+	SIMCountry   string `json:"simCountry"`   // ISO
+
+	// ── Device Identity ──
+	Brand        string `json:"brand"`
+	Model        string `json:"model"`
+	Manufacturer string `json:"manufacturer"`
+	DeviceName   string `json:"deviceName"`
+	ProductName  string `json:"productName"`  // ro.product.name
+	Device       string `json:"device"`       // ro.product.device (codename)
+	Board        string `json:"board"`        // ro.product.board
+	Hardware     string `json:"hardware"`
+	Platform     string `json:"platform"`     // ro.board.platform
+
+	// ── Build Info ──
+	Fingerprint     string `json:"fingerprint"`
+	BuildID         string `json:"buildId"`
+	BuildType       string `json:"buildType"`       // user/userdebug/eng
+	BuildTags       string `json:"buildTags"`
+	OSVersion       string `json:"osVersion"`
+	SDKVersion      string `json:"sdkVersion"`
+	Incremental     string `json:"incremental"`     // ro.build.version.incremental
+	SecurityPatch   string `json:"securityPatch"`   // ro.build.version.security_patch
+	Bootloader      string `json:"bootloader"`
+	RadioBaseband   string `json:"radioBaseband"`   // gsm.version.baseband
+
+	// ── Display ──
+	DisplayDensity string `json:"displayDensity"` // ro.sf.lcd_density
+	DisplayWidth   string `json:"displayWidth"`
+	DisplayHeight  string `json:"displayHeight"`
+
+	// ── Network IDs ──
+	MACWiFi      string `json:"macWifi"`
+	MACBluetooth string `json:"macBluetooth"`
+	WiFiSSID     string `json:"wifiSsid"`
+	WiFiBSSID    string `json:"wifiBssid"`
+	IPAddress    string `json:"ipAddress"`
+
+	// ── Persistent IDs (survive factory reset on some devices) ──
+	AndroidID     string `json:"androidId"`
+	GSFID         string `json:"gsfId"`
+	AdvertisingID string `json:"advertisingId"`
+
+	// ── Misc ──
+	Timezone     string `json:"timezone"`
+	Language     string `json:"language"`
+	CPUABI       string `json:"cpuAbi"`
+	TotalRAM     string `json:"totalRam"`
+	InternalSize string `json:"internalSize"`
+
+	// ── Raw props dump (for panel to parse) ──
+	RawProps map[string]string `json:"rawProps"`
+
+	CollectedAt string `json:"collectedAt"`
+	AgentVer    string `json:"agentVer"`
+}
+
+// metaDir returns ~/.zmmo/devices/<realSerial>/
+func metaDir(realSerial string) string {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = "."
+	}
+	return filepath.Join(home, ".zmmo", "devices", realSerial)
+}
+
+// metaExists checks if meta.json already exists for the given real serial.
+func metaExists(realSerial string) bool {
+	_, err := os.Stat(filepath.Join(metaDir(realSerial), "meta.json"))
+	return err == nil
+}
+
+// collectDeviceMeta gathers all changeable device properties via ADB.
+// Returns the populated DeviceMeta and saves to ~/.zmmo/devices/<realSerial>/meta.json.
+func collectDeviceMeta(serial string) (*DeviceMeta, error) {
+	m := &DeviceMeta{
+		Serial:      serial,
+		AgentVer:    version,
+		CollectedAt: time.Now().Format(time.RFC3339),
+		RawProps:    make(map[string]string),
+	}
+
+	// ── Dump ALL build props in one call ──
+	// getprop returns all properties; we parse just the ones we care about.
+	allProps, _ := adbShell(serial, "getprop")
+	for _, line := range strings.Split(allProps, "\n") {
+		line = strings.TrimSpace(line)
+		// Format: [key]: [value]
+		if idx := strings.Index(line, "]:"); idx > 0 && strings.HasPrefix(line, "[") {
+			key := strings.TrimSpace(line[1:idx])
+			val := strings.TrimSpace(line[idx+2:])
+			if len(val) > 2 && val[0] == '[' && val[len(val)-1] == ']' {
+				val = val[1 : len(val)-1]
+			}
+			m.RawProps[key] = val
+		}
+	}
+
+	// ── Helper: get raw prop from map, otherwise fall back to adb getprop ──
+	getp := func(prop string) string {
+		if v, ok := m.RawProps[prop]; ok && v != "" {
+			return v
+		}
+		return adbGetProp(serial, prop)
+	}
+
+	// ── Device Identity ──
+	m.Brand = getp("ro.product.brand")
+	m.Model = getp("ro.product.model")
+	m.Manufacturer = getp("ro.product.manufacturer")
+	m.ProductName = getp("ro.product.name")
+	m.Device = getp("ro.product.device")
+	m.Board = getp("ro.product.board")
+	m.Hardware = getp("ro.hardware")
+	m.Platform = getp("ro.board.platform")
+	m.DeviceName = getp("ro.product.model") // fallback
+	if dn := getp("bluetooth.device_name"); dn != "" {
+		m.DeviceName = dn
+	}
+
+	// ── Real serial (ro.serialno or bootloader serial) ──
+	m.RealSerial = getp("ro.serialno")
+	if m.RealSerial == "" {
+		m.RealSerial = getp("ro.boot.serialno")
+	}
+	if m.RealSerial == "" {
+		m.RealSerial = serial // fallback to ADB transport id
+	}
+	m.Bootloader = getp("ro.bootloader")
+
+	// ── Build Info ──
+	m.Fingerprint = getp("ro.build.fingerprint")
+	m.BuildID = getp("ro.build.id")
+	m.BuildType = getp("ro.build.type")
+	m.BuildTags = getp("ro.build.tags")
+	m.OSVersion = getp("ro.build.version.release")
+	m.SDKVersion = getp("ro.build.version.sdk")
+	m.Incremental = getp("ro.build.version.incremental")
+	m.SecurityPatch = getp("ro.build.version.security_patch")
+	m.RadioBaseband = getp("gsm.version.baseband")
+	if m.RadioBaseband == "" {
+		m.RadioBaseband = getp("ro.boot.baseband")
+	}
+
+	// ── Display ──
+	m.DisplayDensity = getp("ro.sf.lcd_density")
+	w, _ := adbShell(serial, "wm size 2>/dev/null")
+	if w != "" {
+		w = strings.TrimPrefix(strings.TrimSpace(w), "Physical size: ")
+		w = strings.TrimPrefix(w, "Override size: ")
+		if parts := strings.Split(w, "x"); len(parts) == 2 {
+			m.DisplayWidth, m.DisplayHeight = parts[0], parts[1]
+		}
+	}
+
+	// ── CPU / Memory ──
+	m.CPUABI = getp("ro.product.cpu.abi")
+	if m.CPUABI == "" {
+		m.CPUABI = getp("ro.product.cpu.abilist")
+	}
+	ram, _ := adbShell(serial, "cat /proc/meminfo 2>/dev/null | grep MemTotal | awk '{print $2}'")
+	if ram != "" {
+		k, _ := strconv.Atoi(ram)
+		if k > 0 {
+			m.TotalRAM = fmt.Sprintf("%d MB", k/1024)
+		}
+	}
+	disk, _ := adbShell(serial, "df /data 2>/dev/null | tail -1 | awk '{print $2}'")
+	if disk != "" {
+		sz, _ := strconv.Atoi(disk)
+		if sz > 0 {
+			m.InternalSize = fmt.Sprintf("%d GB", sz/(1024*1024))
+		}
+	}
+
+	// ── Timezone / Language ──
+	m.Timezone, _ = adbShell(serial, "settings get global time_zone 2>/dev/null")
+	m.Language, _ = adbShell(serial, "settings get system system_locales 2>/dev/null")
+	if m.Language == "" {
+		m.Language = getp("persist.sys.locale")
+	}
+
+	// ── IP ──
+	m.IPAddress = detectIP(serial)
+
+	// ── MAC addresses ──
+	wifiMAC, _ := adbShell(serial, "cat /sys/class/net/wlan0/address 2>/dev/null")
+	if wifiMAC == "" {
+		wifiMAC, _ = adbShell(serial, "ip link show wlan0 2>/dev/null | grep ether | awk '{print $2}'")
+	}
+	m.MACWiFi = strings.TrimSpace(wifiMAC)
+
+	btMAC, _ := adbShell(serial, "settings get secure bluetooth_address 2>/dev/null")
+	if btMAC == "" {
+		btMAC, _ = adbShell(serial, "cat /data/misc/bluedroid/bt_config.conf 2>/dev/null | grep -i 'bdAddress' | head -1 | awk '{print $2}'")
+	}
+	if btMAC == "" {
+		btMAC, _ = adbShell(serial, "cat /data/misc/bluetooth/bt_config.conf 2>/dev/null | grep -i 'bdAddress' | head -1 | awk '{print $2}'")
+	}
+	m.MACBluetooth = strings.TrimSpace(btMAC)
+
+	// ── WiFi connection ──
+	m.WiFiSSID, _ = adbShell(serial, "dumpsys wifi 2>/dev/null | grep -m1 'mWifiInfo' | sed 's/.*SSID: //' | sed 's/,.*//'")
+	if m.WiFiSSID != "" && m.WiFiSSID[0] == '"' {
+		m.WiFiSSID = m.WiFiSSID[1 : len(m.WiFiSSID)-1]
+	}
+	if m.WiFiSSID == "" {
+		m.WiFiSSID, _ = adbShell(serial, "dumpsys connectivity 2>/dev/null | grep 'Wi-Fi network' | head -1 | awk '{print $NF}'")
+	}
+	m.WiFiBSSID, _ = adbShell(serial, "dumpsys wifi 2>/dev/null | grep -m1 'mWifiInfo' | sed 's/.*BSSID: //' | sed 's/,.*//'")
+
+	// ── SIM / Telephony (may fail on WiFi-only tablets) ──
+
+	// IMEI 1 & 2 (works on most devices)
+	imei1, _ := adbShell(serial, "service call iphonesubinfo 1 2>/dev/null | awk '{print $NF}' | sed 's/\\r//g' | sed \"s/'//g\"")
+	m.IMEI1 = parsePhoneServiceOutput(imei1)
+	if m.IMEI1 == "" {
+		m.IMEI1 = getp("gsm.imei")
+	}
+	if m.IMEI1 == "" {
+		m.IMEI1 = getp("persist.radio.imei")
+	}
+
+	imei2, _ := adbShell(serial, "service call iphonesubinfo 3 2>/dev/null | awk '{print $NF}' | sed 's/\\r//g' | sed \"s/'//g\"")
+	m.IMEI2 = parsePhoneServiceOutput(imei2)
+	if m.IMEI2 == "" {
+		m.IMEI2 = getp("gsm.imei2")
+	}
+	if m.IMEI2 == "" {
+		m.IMEI2 = getp("persist.radio.imei2")
+	}
+
+	// MEID
+	meid, _ := adbShell(serial, "service call iphonesubinfo 9 2>/dev/null | awk '{print $NF}' | sed 's/\\r//g' | sed \"s/'//g\"")
+	m.MEID = parsePhoneServiceOutput(meid)
+
+	// IMSI 1 & 2
+	m.IMSI1, _ = adbShell(serial, "dumpsys telephony.registry 2>/dev/null | grep -m1 'mSubId=0' -A2 | grep mImsi | awk -F= '{print $NF}'")
+	if m.IMSI1 == "" {
+		m.IMSI1 = getp("gsm.sim.operator.numeric")
+		// Append wildcard IMSI suffix — only operator part is available from getprop
+	}
+	imsi2, _ := adbShell(serial, "dumpsys telephony.registry 2>/dev/null | grep -m1 'mSubId=1' -A2 | grep mImsi | awk -F= '{print $NF}'")
+	m.IMSI2 = strings.TrimSpace(imsi2)
+	if m.IMSI2 == "" {
+		m.IMSI2 = getp("gsm.sim.operator.numeric.2")
+	}
+
+	// ICCID
+	m.ICCID1, _ = adbShell(serial, "dumpsys telephony.registry 2>/dev/null | grep -m1 'mSubId=0' -A15 | grep mIccId | awk -F= '{print $NF}'")
+	if m.ICCID1 == "" {
+		m.ICCID1 = getp("persist.radio.iccid")
+	}
+	iccid2, _ := adbShell(serial, "dumpsys telephony.registry 2>/dev/null | grep -m1 'mSubId=1' -A15 | grep mIccId | awk -F= '{print $NF}'")
+	m.ICCID2 = strings.TrimSpace(iccid2)
+
+	// Phone number
+	m.PhoneNumber, _ = adbShell(serial, "dumpsys telephony.registry 2>/dev/null | grep -m1 'mSubId=0' -A30 | grep mMsisdn | awk -F= '{print $NF}'")
+	if m.PhoneNumber == "" {
+		m.PhoneNumber = getp("gsm.sim.phoneNumber")
+	}
+
+	// SIM Operator
+	m.SIMOperator = getp("gsm.sim.operator.numeric")
+	m.SIMCarrier = getp("gsm.sim.operator.alpha")
+	m.SIMCountry = getp("gsm.sim.operator.iso-country")
+
+	// ── Persistent IDs ──
+	m.AndroidID, _ = adbShell(serial, "settings get secure android_id 2>/dev/null")
+
+	// GSF ID
+	gsf, _ := adbShell(serial, "sqlite3 /data/data/com.google.android.gsf/databases/gservices.db \"select value from main where name='android_id';\" 2>/dev/null")
+	if gsf == "" {
+		gsf, _ = adbShell(serial, "content query --uri content://com.google.android.gsf.gservices/prefix --projection value --where \"name='android_id'\" 2>/dev/null | sed 's/.*value=//' | sed 's/,.*//'")
+	}
+	m.GSFID = strings.TrimSpace(gsf)
+
+	// Advertising ID
+	adID, _ := adbShell(serial, "cat /data/data/com.google.android.gms/shared_prefs/adid_settings.xml 2>/dev/null | grep adid_key | sed 's/.*<string name=\"adid_key\">//' | sed 's/<.*//'")
+	if adID == "" {
+		adID, _ = adbShell(serial, "cat /data/data/com.google.android.gms/shared_prefs/AdvertisingId.xml 2>/dev/null | grep string | sed 's/.*>//' | sed 's/<.*//'")
+	}
+	m.AdvertisingID = strings.TrimSpace(adID)
+
+	// ── Save to ~/.zmmo/devices/<realSerial>/meta.json ──
+	dir := metaDir(m.RealSerial)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return m, fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return m, fmt.Errorf("marshal: %w", err)
+	}
+	metaPath := filepath.Join(dir, "meta.json")
+	if err := os.WriteFile(metaPath, data, 0644); err != nil {
+		return m, fmt.Errorf("write meta.json: %w", err)
+	}
+	log.Printf("[meta] Saved %s (%d bytes)", metaPath, len(data))
+	return m, nil
+}
+
+// parsePhoneServiceOutput converts hex-string service call output to human-readable ASCII.
+// E.g. "303335393430343038303630383439" → "035940408060849"
+func parsePhoneServiceOutput(raw string) string {
+	// Strip newlines and spaces
+	s := strings.ReplaceAll(raw, "\n", "")
+	s = strings.ReplaceAll(s, " ", "")
+	s = strings.Trim(s, ".")
+
+	// Try hex decode (service call returns hex pairs that spell ASCII in decimal)
+	if re := regexp.MustCompile(`^[0-9]{15,}$`); re.MatchString(s) {
+		// This could be a raw numeric IMEI already
+		return s
+	}
+
+	// Try dot-separated hex (e.g. "30 33 35 39 34 30 34 30 ...")
+	parts := strings.Split(raw, ".")
+	if len(parts) > 3 {
+		var asciiStr strings.Builder
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			n, err := strconv.ParseInt(p, 16, 32)
+			if err == nil && n >= 0x20 && n <= 0x7E {
+				asciiStr.WriteByte(byte(n))
+			}
+		}
+		if asciiStr.Len() > 0 {
+			return asciiStr.String()
+		}
+	}
+
+	// Try comma-separated format
+	if len(parts) <= 3 && strings.Contains(raw, ",") {
+		var asciiStr strings.Builder
+		for _, p := range strings.Split(raw, ",") {
+			p = strings.TrimSpace(p)
+			n, err := strconv.ParseInt(p, 10, 32)
+			if err == nil && n >= 0x20 && n <= 0x7E {
+				asciiStr.WriteByte(byte(n))
+			}
+		}
+		if asciiStr.Len() > 0 {
+			return asciiStr.String()
+		}
+	}
+
+	return strings.TrimSpace(raw)
+}
+
+// zmmoHome returns cross-platform path to ~/.zmmo
+func zmmoHome() string {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = "."
+	}
+	return filepath.Join(home, ".zmmo")
+}
+
 // ── CORS & JSON ──
 
 func corsMiddleware(next http.Handler) http.Handler {
@@ -280,7 +657,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 			Valid:      true,
 			ExpiresAt:  time.Now().AddDate(1, 0, 0).Format(time.RFC3339),
 			MaxDevices: 100,
-			Features:   []string{"adb", "backup", "restore", "props"},
+			Features:   []string{"adb", "backup", "restore", "props", "meta"},
 		},
 	})
 }
@@ -329,7 +706,60 @@ func handleDevice(w http.ResponseWriter, r *http.Request) {
 			props := readDeviceProps(found.Serial)
 			found.Props = &props
 		}
+		// Auto-collect meta if not already saved
+		realSerial := found.Serial
+		if sn := adbGetProp(found.Serial, "ro.serialno"); sn != "" {
+			realSerial = sn
+		}
+		if !metaExists(realSerial) {
+			go func(ser, rs string) {
+				if meta, err := collectDeviceMeta(ser); err != nil {
+					log.Printf("[meta] auto-collect %s: %v", ser, err)
+				} else {
+					log.Printf("[meta] auto-collected for %s → %s", ser, meta.RealSerial)
+				}
+			}(found.Serial, realSerial)
+		}
 		writeJSON(w, found)
+	case r.Method == "GET" && subPath == "meta":
+		// Read existing meta.json without re-collecting
+		realSerial := found.Serial
+		if sn := adbGetProp(found.Serial, "ro.serialno"); sn != "" {
+			realSerial = sn
+		}
+		metaPath := filepath.Join(metaDir(realSerial), "meta.json")
+		data, err := os.ReadFile(metaPath)
+		if err != nil {
+			writeJSON(w, map[string]interface{}{
+				"ok":      false,
+				"found":   false,
+				"path":    metaPath,
+				"message": "No meta.json yet — use refresh-meta to collect",
+			})
+			return
+		}
+		var meta DeviceMeta
+		if err := json.Unmarshal(data, &meta); err != nil {
+			writeError(w, 500, fmt.Sprintf("corrupt meta.json: %v", err))
+			return
+		}
+		writeJSON(w, map[string]interface{}{
+			"ok":    true,
+			"found": true,
+			"path":  metaPath,
+			"meta":  meta,
+		})
+	case r.Method == "POST" && subPath == "refresh-meta":
+		meta, err := collectDeviceMeta(found.Serial)
+		if err != nil {
+			writeError(w, 500, fmt.Sprintf("failed to collect meta: %v", err))
+			return
+		}
+		writeJSON(w, map[string]interface{}{
+			"ok":   true,
+			"path": filepath.Join(metaDir(meta.RealSerial), "meta.json"),
+			"meta": meta,
+		})
 	case r.Method == "PUT" && subPath == "props":
 		var body struct {
 			Props DeviceProps `json:"props"`
@@ -360,7 +790,7 @@ func applyProps(serial string, props *DeviceProps) {
 		"ro.build.fingerprint":    props.Fingerprint,
 	} {
 		if pv.Enabled && pv.Value != "" {
-			exec.Command("adb", "-s", serial, "shell", "setprop "+prop+" "+pv.Value).Run()
+			cmdHide("adb", "-s", serial, "shell", "setprop "+prop+" "+pv.Value).Run()
 		}
 	}
 }
@@ -440,7 +870,7 @@ func executeTask(task *Task) {
 			task.Status = "completed"
 		}
 	case "reboot":
-		out, err := exec.Command("adb", "-s", serial, "reboot").CombinedOutput()
+		out, err := cmdHide("adb", "-s", serial, "reboot").CombinedOutput()
 		task.Output = strings.TrimSpace(string(out))
 		if err != nil {
 			task.Status = "failed"
@@ -574,13 +1004,8 @@ func startServer() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", handleStatus)
-	mux.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/devices" {
-			handleDevices(w, r)
-		} else {
-			handleDevice(w, r)
-		}
-	})
+	mux.HandleFunc("/devices", handleDevices)
+	mux.HandleFunc("/devices/", handleDevice)
 	mux.HandleFunc("/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/tasks" {
 			handleTasks(w, r)
