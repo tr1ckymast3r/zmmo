@@ -1,0 +1,131 @@
+# ZMMO Patch: android.os.Build static fields → Device Identity spoofing
+# Target: framework.jar → android/os/Build.smali
+# 
+# Build holds static final fields that apps read for device identity.
+# Most are set once in <clinit> from system properties at boot.
+# This patch replaces the static initializer to read from persist.zmmo.* props.
+#
+# Fields to spoof (19 total):
+#   BRAND, MODEL, MANUFACTURER, DEVICE, PRODUCT, BOARD, HARDWARE
+#   FINGERPRINT, ID, DISPLAY, TYPE, TAGS, HOST, USER
+#   BOOTLOADER, RADIO (baseband), SERIAL, SKU
+
+.method public static constructor <clinit>()V
+    .locals 3
+
+    # --- Read each field, allow override via persist.zmmo.* ---
+
+    # BRAND
+    const-string v0, "ro.product.brand"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->BRAND:Ljava/lang/String;
+
+    # MODEL
+    const-string v0, "ro.product.model"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->MODEL:Ljava/lang/String;
+
+    # MANUFACTURER
+    const-string v0, "ro.product.manufacturer"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->MANUFACTURER:Ljava/lang/String;
+
+    # DEVICE (codename)
+    const-string v0, "ro.product.device"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->DEVICE:Ljava/lang/String;
+
+    # PRODUCT
+    const-string v0, "ro.product.name"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->PRODUCT:Ljava/lang/String;
+
+    # BOARD
+    const-string v0, "ro.product.board"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->BOARD:Ljava/lang/String;
+
+    # HARDWARE
+    const-string v0, "ro.hardware"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->HARDWARE:Ljava/lang/String;
+
+    # FINGERPRINT — most critical for SafetyNet/Play Integrity
+    const-string v0, "ro.build.fingerprint"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->FINGERPRINT:Ljava/lang/String;
+
+    # ID (build ID)
+    const-string v0, "ro.build.id"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->ID:Ljava/lang/String;
+
+    # DISPLAY
+    const-string v0, "ro.build.display.id"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->DISPLAY:Ljava/lang/String;
+
+    # TYPE
+    const-string v0, "ro.build.type"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->TYPE:Ljava/lang/String;
+
+    # TAGS
+    const-string v0, "ro.build.tags"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->TAGS:Ljava/lang/String;
+
+    # BOOTLOADER
+    const-string v0, "ro.bootloader"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->BOOTLOADER:Ljava/lang/String;
+
+    # RADIO (baseband)
+    const-string v0, "ro.baseband"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->RADIO:Ljava/lang/String;
+
+    # SERIAL
+    const-string v0, "ro.serialno"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build;->SERIAL:Ljava/lang/String;
+
+    # TIME (build time)
+    const-string v0, "ro.build.date.utc"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->getLong(Ljava/lang/String;)J
+    move-result-wide v1
+    sput-wide v1, Landroid/os/Build;->TIME:J
+
+    # SDK_INT — NEVER spoof this, apps use it for compatibility
+    sget v1, Landroid/os/Build$VERSION;->SDK_INT:I
+    sput v1, Landroid/os/Build$VERSION;->SDK_INT:I
+
+    # INCREMENTAL
+    const-string v0, "ro.build.version.incremental"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build$VERSION;->INCREMENTAL:Ljava/lang/String;
+
+    # SECURITY_PATCH
+    const-string v0, "ro.build.version.security_patch"
+    invoke-static {v0}, Lzmmo/ZmmoProps;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    sput-object v1, Landroid/os/Build$VERSION;->SECURITY_PATCH:Ljava/lang/String;
+
+    return-void
+.end method

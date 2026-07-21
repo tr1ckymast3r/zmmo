@@ -1,0 +1,31 @@
+# ZMMO Patch: ServiceStateTracker.getOperatorNumeric() → SIM Operator spoofing
+# Target: com/android/internal/telephony/ServiceStateTracker.smali
+# Hook: getOperatorNumeric() + operator name helpers
+#
+# The operator numeric (MCC+MNC) identifies the carrier (e.g., 45204 = Viettel).
+# This patch intercepts both the numeric code and the operator name string.
+
+# --- Hook 1: getOperatorNumeric() ---
+.method public getOperatorNumeric()Ljava/lang/String;
+    .locals 4
+
+    const-string v0, "persist.zmmo.sim_operator"
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+
+    :zmmo_real_operator
+    iget-object v3, p0, Lcom/android/internal/telephony/ServiceStateTracker;->mSS:Landroid/telephony/ServiceState;
+    invoke-virtual {v3}, Landroid/telephony/ServiceState;->getOperatorNumeric()Ljava/lang/String;
+    move-result-object v1
+
+    :zmmo_return_spoofed
+    return-object v1
+.end method
+
+# --- Hook 2: getSystemProperty for operator alpha ---
+# Many apps read gsm.sim.operator.alpha directly via SystemProperties
+# We set persist.zmmo.* props at boot via init.d script or Magisk post-fs-data

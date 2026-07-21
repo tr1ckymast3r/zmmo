@@ -1,0 +1,44 @@
+# ZMMO Patch: GsmCdmaPhone.getLine1Number() → Phone Number spoofing
+# Target: com/android/internal/telephony/PhoneBase.smali (or GsmCdmaPhone)
+# Hook: getLine1Number()Ljava/lang/String;
+#
+# Phone number (MSISDN) is read from SIM EF_MSISDN.
+# This intercepts the return to spoof the phone number.
+
+# NOTE: LineageOS 18-21 moves this to GsmCdmaPhone.smali.
+# Adjust the class path based on Android version:
+#   Android 10-12: com/android/internal/telephony/GsmCdmaPhone.smali
+#   Android 13-14: com/android/internal/telephony/GsmCdmaPhone.smali (same)
+
+.method public getLine1Number()Ljava/lang/String;
+    .locals 4
+
+    const-string v0, "persist.zmmo.phone_number"
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+
+    :zmmo_real_number
+    iget-object v3, p0, Lcom/android/internal/telephony/GsmCdmaPhone;->mImsi:Ljava/lang/String;
+    # Actually: reads from IccRecords.getMsisdn()
+    iget-object v3, p0, Lcom/android/internal/telephony/GsmCdmaPhone;->mIccRecords:Ljava/util/concurrent/atomic/AtomicReference;
+    invoke-virtual {v3}, Ljava/util/concurrent/atomic/AtomicReference;->get()Ljava/lang/Object;
+    move-result-object v3
+    check-cast v3, Lcom/android/internal/telephony/uicc/IccRecords;
+    if-nez v3, :zmmo_return_null
+
+    invoke-virtual {v3}, Lcom/android/internal/telephony/uicc/IccRecords;->getMsisdn()Ljava/lang/String;
+    move-result-object v1
+
+    goto :zmmo_return
+
+    :zmmo_return_null
+    const/4 v1, 0x0
+
+    :zmmo_return
+    :zmmo_return_spoofed
+    return-object v1
+.end method

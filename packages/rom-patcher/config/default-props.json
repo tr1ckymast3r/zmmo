@@ -1,0 +1,63 @@
+{
+  "_schema": "zmmo-rom-patcher-config-v1",
+  "description": "Default spoof values for LineageOS ROM patch. Set individually via ZMMO panel or manager-agent API.",
+
+  "sim": {
+    "imei_slot1": "",
+    "imei_slot2": "",
+    "meid": "",
+    "imsi_slot1": "",
+    "imsi_slot2": "",
+    "iccid_slot1": "",
+    "iccid_slot2": "",
+    "phone_number": "",
+    "sim_operator": "",
+    "sim_carrier": "",
+    "sim_country": "vn"
+  },
+
+  "device": {
+    "brand": "",
+    "model": "",
+    "manufacturer": "",
+    "device_name": "",
+    "product_name": "",
+    "device_codename": "",
+    "board": "",
+    "hardware": "",
+    "platform": "",
+    "fingerprint": "",
+    "build_id": "",
+    "build_type": "user",
+    "build_tags": "release-keys",
+    "os_version": "",
+    "sdk_version": 0,
+    "incremental": "",
+    "security_patch": "",
+    "bootloader": "",
+    "radio_baseband": "",
+    "serial_no": ""
+  },
+
+  "network": {
+    "wifi_mac": "",
+    "bluetooth_mac": "",
+    "wifi_ssid": "",
+    "wifi_bssid": ""
+  },
+
+  "geo": {
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "altitude": 0.0
+  },
+
+  "other": {
+    "android_id": "",
+    "gsf_id": "",
+    "advertising_id": "",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "language": "vi-VN",
+    "cpu_abi": "arm64-v8a"
+  }
+}

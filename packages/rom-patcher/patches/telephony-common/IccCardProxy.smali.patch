@@ -1,0 +1,40 @@
+# ZMMO Patch: IccCardProxy.getIccId() → ICCID spoofing
+# Target: com/android/internal/telephony/uicc/IccCardProxy.smali
+# Hook: getIccId()Ljava/lang/String;
+#
+# Flow: Modem → RIL daemon → RILJ → IccCardProxy → TelephonyManager → App
+# This hooks at the IccCardProxy level, intercepting before it reaches apps.
+
+# === ORIGINAL METHOD (approximate) ===
+# .method public getIccId()Ljava/lang/String;
+#     .locals 2
+#     iget-object v0, p0, Lcom/android/internal/telephony/uicc/IccCardProxy;->mUiccController:Lcom/android/internal/telephony/uicc/UiccController;
+#     invoke-virtual {v0}, ... → returns real ICCID
+#     return-object v0
+# .end method
+
+# === PATCH: Inject property lookup before return ===
+# After the real ICCID is fetched, check /data/local/tmp/zmmo-config for override
+
+.method public getIccId()Ljava/lang/String;
+    .locals 5
+
+    # Try to load spoofed ICCID from config
+    const-string v0, "persist.zmmo.iccid"
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+
+    # If empty/null, fall through to real ICCID
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+
+    # Original logic: get real ICCID
+    :zmmo_real_iccid
+    iget-object v3, p0, Lcom/android/internal/telephony/uicc/IccCardProxy;->mUiccController:Lcom/android/internal/telephony/uicc/UiccController;
+    invoke-virtual {v3}, Lcom/android/internal/telephony/uicc/UiccController;->getIccId()Ljava/lang/String;
+    move-result-object v1
+
+    :zmmo_return_spoofed
+    return-object v1
+.end method

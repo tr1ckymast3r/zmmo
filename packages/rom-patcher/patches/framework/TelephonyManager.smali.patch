@@ -1,0 +1,90 @@
+# ZMMO Patch: TelephonyManager.getDeviceId() / getImei() → IMEI spoofing
+# Target: framework.jar → android/telephony/TelephonyManager.smali
+# 
+# getDeviceId(int slotIndex) returns IMEI for GSM or MEID for CDMA.
+# Android 10+ deprecates getDeviceId() in favor of getImei(int).
+# Both ultimately route through ITelephony.getDeviceId() → RIL.
+# This patch hooks at the TelephonyManager level (before binder call).
+
+# --- Hook: getDeviceId(int) ---
+.method public getDeviceId(I)Ljava/lang/String;
+    .locals 4
+
+    # Check if slot 0 or 1
+    if-eqz p1, :zmmo_slot0
+    const/4 v0, 0x1
+    if-ne p1, v0, :zmmo_slot1
+    # Slot >= 2 — fall through to real
+    goto :zmmo_real
+
+    :zmmo_slot0
+    const-string v0, "persist.zmmo.imei_slot1"
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+    goto :zmmo_real
+
+    :zmmo_slot1
+    const-string v0, "persist.zmmo.imei_slot2"
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+
+    :zmmo_real
+    # Original: call ITelephony.getDeviceId()
+    invoke-direct {p0, p1}, Lzmmo/ZmmoTelephony;->getRealDeviceId(I)Ljava/lang/String;
+    move-result-object v1
+
+    :zmmo_return_spoofed
+    return-object v1
+.end method
+
+# --- Hook: getImei(int) ---
+.method public getImei(I)Ljava/lang/String;
+    .locals 4
+
+    if-eqz p1, :zmmo_imei_slot1
+
+    :zmmo_imei_slot0
+    const-string v0, "persist.zmmo.imei_slot1"
+    goto :zmmo_imei_check
+
+    :zmmo_imei_slot1
+    const-string v0, "persist.zmmo.imei_slot2"
+
+    :zmmo_imei_check
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+
+    :zmmo_imei_real
+    invoke-direct {p0, p1}, Lzmmo/ZmmoTelephony;->getRealImei(I)Ljava/lang/String;
+    move-result-object v1
+
+    :zmmo_return_spoofed
+    return-object v1
+.end method
+
+# --- Hook: getMeid(int) ---
+.method public getMeid(I)Ljava/lang/String;
+    .locals 2
+
+    const-string v0, "persist.zmmo.meid"
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+
+    invoke-direct {p0, p1}, Lzmmo/ZmmoTelephony;->getRealMeid(I)Ljava/lang/String;
+    move-result-object v1
+
+    :zmmo_return_spoofed
+    return-object v1
+.end method

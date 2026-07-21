@@ -1,0 +1,6 @@
+id=zmmo-rom-patcher
+name=ZMMO ROM Patcher
+version=1.0.0
+versionCode=1
+author=tr1ckymast3r
+description=Device identity spoofing framework patches for LineageOS

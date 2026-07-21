@@ -1,0 +1,36 @@
+# ZMMO Patch: UiccCardApplication.getImsi() → IMSI spoofing
+# Target: com/android/internal/telephony/uicc/UiccCardApplication.smali
+# Hook: getImsi()Ljava/lang/String;
+#
+# IMSI is fetched from the SIM card EF files via RIL.
+# This patch intercepts the return value and replaces it with a spoofed IMSI.
+
+.method public getImsi()Ljava/lang/String;
+    .locals 4
+
+    # Check for spoofed IMSI from system property
+    const-string v0, "persist.zmmo.imsi"
+    invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+    move-result-object v1
+
+    invoke-static {v1}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+    move-result v2
+    if-nez v2, :zmmo_return_spoofed
+
+    # Original: get real IMSI from IccRecords
+    :zmmo_real_imsi
+    iget-object v3, p0, Lcom/android/internal/telephony/uicc/UiccCardApplication;->mIccRecords:Lcom/android/internal/telephony/uicc/IccRecords;
+    if-nez v3, :zmmo_return_null
+
+    invoke-virtual {v3}, Lcom/android/internal/telephony/uicc/IccRecords;->getIMSI()Ljava/lang/String;
+    move-result-object v1
+
+    goto :zmmo_return
+
+    :zmmo_return_null
+    const/4 v1, 0x0
+
+    :zmmo_return
+    :zmmo_return_spoofed
+    return-object v1
+.end method
