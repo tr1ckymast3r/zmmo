@@ -1,0 +1,28 @@
+[Unit]
+Description=ZMMO Device Changer Panel (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/thay/zmmo/packages/panel
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=256
+ExecStart=/usr/bin/npx next start -p 3013 -H 0.0.0.0
+Restart=on-failure
+RestartSec=5
+
+# ── Resource Limits ──
+MemoryMax=384M
+MemoryHigh=256M
+CPUQuota=50%
+TasksMax=32
+
+# ── OOM Score — kill nextjs before critical services ──
+OOMScoreAdjust=500
+
+# ── Security ──
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
