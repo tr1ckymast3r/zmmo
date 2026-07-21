@@ -2,22 +2,36 @@
 
 **Bottom layer of ZMMO Device Changer** — patches LineageOS framework to enable device identity spoofing at the Android OS level.
 
-```
-┌─ Web Panel (Next.js) ────────────────────────┐
-│ packages/panel/              port 3013        │
-└──────────────────┬────────────────────────────┘
-                   │ HTTP REST API
-┌──────────────────▼────────────────────────────┐
-│ Manager-Agent (Go)                            │
-│ packages/manager-agent/      port 55555       │
-└──────────────────┬────────────────────────────┘
-                   │ ADB (USB/WiFi)
-┌──────────────────▼────────────────────────────┐
-│ ROM Patcher ← YOU ARE HERE                    │
-│ packages/rom-patcher/                         │
-│ Patches: telephony-common.jar, framework.jar   │
-└───────────────────────────────────────────────┘
-```
+## Compatibility Matrix
+
+| Device Family | LineageOS | Android | Status | Notes |
+|--------------|-----------|---------|--------|-------|
+| **Pixel 2-5** (Snapdragon) | 18.1–21 | 11–14 | ✅ Full | Closest to AOSP, patches apply cleanly |
+| **Pixel 6-9** (Tensor) | 20–22 | 13–15 | ✅ Full | VDEX-only, CarrierConfig bypass needed |
+| **Samsung S8** (Exynos 8895) | 18.1–20 | 10–13 | ✅ Full | `dreamlte/dream2lte` |
+| **Samsung S9** (Exynos 9810) | 19.1–21 | 10–14 | ✅ Full | `starlte/star2lte`, SamsungRIL hooks |
+| **Samsung S10** (Exynos 9820) | 20–21 | 12–14 | ✅ Full | `beyond0lte/beyond1lte/beyond2lte` |
+| **Samsung S20** (Exynos 990) | 21 | 13–14 | ⚠️ Partial | `x1q`, RIL changes in Android 13+ |
+| **Generic AOSP** | Any | 10–14 | ✅ Full | Common patches target AOSP classes |
+| **Xiaomi/OnePlus** | Any | 10–14 | ⚠️ Untested | Should work if AOSP RILJ is used |
+| **MIUI/HyperOS** | N/A | 10–14 | ❌ Not supported | Uses MIUI-specific telephony framework |
+
+### Feature Support Per Device
+
+| Feature | Pixel | Samsung Exynos | Generic |
+|---------|-------|---------------|---------|
+| IMEI spoof (both slots) | ✅ | ✅ | ✅ |
+| IMSI spoof | ✅ | ✅ | ✅ |
+| ICCID spoof | ✅ | ✅ | ✅ |
+| Phone number spoof | ✅ | ✅ | ✅ |
+| Build.prop spoof (19 fields) | ✅ | ✅ | ✅ |
+| SIM operator spoof | ✅ | ⚠️ * | ✅ |
+| CarrierConfig bypass | ⚠️ ** | N/A | N/A |
+| SamsungRIL hooks | N/A | ✅ | N/A |
+| SafetyNet/Play Integrity | ❌ | ❌ | ❌ |
+
+\* Samsung ServiceMode (*#0011#) may still show real operator  
+\*\* Pixel Adaptive Connectivity may override — disable via `pm disable com.google.android.apps.connectivity`
 
 ## Architecture
 
@@ -26,136 +40,79 @@ Modem → RIL native daemon → RILJ.java (HOOKED!) → TelephonyManager → App
                                     ↑
                             IccCardProxy, UiccCardApplication
                             PhoneBase, ServiceStateTracker
+                    ┌─────── SamsungRIL (Exynos only)
+                    │
+Pixel: CarrierConfigManager → Adaptive Connectivity (disable)
 ```
-
-Hooks are applied at the **RILJ/framework level** — no modem patching required, no brick risk.
-
-## What Gets Patched
-
-### telephony-common.jar (SIM properties)
-| Class | Method | Property |
-|-------|--------|----------|
-| `IccCardProxy` | `getIccId()` | ICCID |
-| `UiccCardApplication` | `getImsi()` | IMSI |
-| `PhoneBase` / `GsmCdmaPhone` | `getLine1Number()` | Phone Number |
-| `ServiceStateTracker` | `getOperatorNumeric()` | SIM Operator (MCC+MNC) |
-
-### framework.jar (Device identity)
-| Class | What | Fields |
-|-------|------|--------|
-| `Build` | Static device identity | BRAND, MODEL, MANUFACTURER, DEVICE, PRODUCT, FINGERPRINT, ID, BOARD, HARDWARE, BOOTLOADER, RADIO, SERIAL, TAGS, TYPE |
-| `TelephonyManager` | IMEI/MEID access | `getDeviceId()`, `getImei()`, `getMeid()` |
-
-### New helper classes (added to framework.jar)
-- `zmmo/ZmmoProps` — reads `persist.zmmo.*` override props, falls back to real values
-- `zmmo/ZmmoTelephony` — direct ITelephony binder calls (bypass hooks for real values)
 
 ## Quick Start
 
-### Requirements
-- LineageOS ROM ZIP (18.1–21, any device)
-- Java 11+
-- ADB (for --direct mode)
-- Rooted device with Magisk (for --magisk mode)
-
-### Build Magisk Module
 ```bash
-./build.sh ~/Downloads/lineage-20.0-20250101-UNOFFICIAL-star2lte.zip --magisk
+# Auto-detect device + Android version
+./build.sh ~/Downloads/lineage-21.0-star2lte.zip --magisk
+
+# Force device family
+./build.sh lineage-panther.zip --magisk --device=pixel
+
+# See auto-detection
+./scripts/detect-device.sh lineage-star2lte.zip
 ```
 
-Output: `out/zmmo-rom-patcher-magisk-YYMMDD_HHMM.zip`
+Output: `out/zmmo-rom-patcher-magisk-<family>-a<ver>-YYMMDD.zip`
 
-### Install
+## Install
+
 ```bash
-# Push Magisk module to device
+# Push to device
 adb push out/zmmo-rom-patcher-magisk-*.zip /sdcard/Download/
 
-# Install via Magisk Manager → Modules → Install from storage
-# OR:
+# Install via Magisk
 adb shell su -c "magisk --install-module /sdcard/Download/zmmo-rom-patcher-magisk-*.zip"
-
-# Reboot
 adb reboot
 ```
 
-### Direct Patch (ADB, device must be rooted + rw system)
-```bash
-./build.sh ~/Downloads/lineage-20.0-20250101-UNOFFICIAL-star2lte.zip --direct
-adb push out/zmmo-rom-patcher-direct-*.tar.gz /data/local/tmp/
-adb shell su -c "cd /data/local/tmp && tar xzf zmmo-rom-patcher-direct-*.tar.gz && ./install.sh"
-adb reboot
+## Patch Structure (Multi-Device)
+
+```
+patches/
+├── common/any/              ← Generic AOSP (works on all devices)
+│   ├── framework/
+│   │   ├── Build.smali.patch
+│   │   ├── TelephonyManager.smali.patch
+│   │   ├── ZmmoProps.smali
+│   │   └── ZmmoTelephony.smali
+│   └── telephony-common/
+│       ├── IccCardProxy.smali.patch
+│       ├── UiccCardApplication.smali.patch
+│       ├── PhoneBase.smali.patch
+│       └── ServiceStateTracker.smali.patch
+├── pixel/13/                ← Pixel Tensor G2 (Android 13)
+├── samsung-exynos/12/       ← Samsung S10 (Android 12)
+│   └── README.md            ← SamsungRIL hook docs
 ```
 
-## How It Works
+**Priority:** `device/version` > `device/any` > `common/version` > `common/any`
 
-1. **extract-framework.sh** — pulls `framework.jar`, `telephony-common.jar` from ROM ZIP
-2. **deodex.sh** — converts `.odex` → smali using baksmali, reassembles into `.jar`
-3. **patch.sh** — applies ZMMO smali patches to intercept identity methods
-4. **repack-magisk.sh** — bundles patched jars + init script into Magisk module
+## Spoof Properties
 
-At boot, `zmmo-init.rc` initializes `persist.zmmo.*` properties. The ZMMO Manager-Agent then sets actual spoof values via `setprop` at runtime.
+All set via `persist.zmmo.*` at runtime by manager-agent:
 
-## Property Reference
-
-All spoof values are set via `persist.zmmo.*` system properties:
-
-| Property | Type | Example |
-|----------|------|---------|
-| `persist.zmmo.imei_slot1` | String (15 digits) | `359404080608491` |
-| `persist.zmmo.imei_slot2` | String (15 digits) | `359404080608509` |
-| `persist.zmmo.imsi` | String | `452040123456789` |
-| `persist.zmmo.iccid` | String (19-20 digits) | `8984040000012345678` |
-| `persist.zmmo.phone_number` | String | `+84123456789` |
-| `persist.zmmo.sim_operator` | String (MCC+MNC) | `45204` |
-| `persist.zmmo.brand` | String | `samsung` |
-| `persist.zmmo.model` | String | `SM-G991B` |
-| `persist.zmmo.fingerprint` | String | `samsung/x1qxxx/x1q:12/SP1A...` |
-| ... | ... | ... |
-
-See `config/default-props.json` for full list.
+| Property | What |
+|----------|------|
+| `persist.zmmo.imei_slot1` | IMEI slot 1 (15 digits) |
+| `persist.zmmo.imei_slot2` | IMEI slot 2 |
+| `persist.zmmo.imsi` | IMSI |
+| `persist.zmmo.iccid` | ICCID (19-20 digits) |
+| `persist.zmmo.phone_number` | Phone number |
+| `persist.zmmo.sim_operator` | MCC+MNC (e.g. 45204) |
+| `persist.zmmo.brand` | Brand |
+| `persist.zmmo.model` | Model |
+| `persist.zmmo.fingerprint` | Build fingerprint |
+| ... | (see config/default-props.json) |
 
 ## Limitations
 
-- **SafetyNet / Play Integrity will fail** — needs separate PIF module (not included). ZMMO only handles device identity, not attestation.
-- **Modem-level IMEI unchanged** — apps reading directly from modem (engineering mode, `*#06#` on some devices) will see real IMEI. Most apps go through TelephonyManager → RILJ and are caught.
-- **Android 13+ changes** — some classes moved to APEX modules; may need different hook points.
-- **Device-specific builds** — Exynos vs Snapdragon ROMs have different framework layouts. Test on target device.
-- **VDEX/OAT format changes** — Android 10+ uses VDEX; baksmali 3.x handles most cases.
-
-## Troubleshooting
-
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| Bootloop after install | Corrupt framework.jar | Restore backup from `/data/local/tmp/zmmo-backup-*` via TWRP |
-| Props not applying | `zmmo-init.rc` not running | Check `adb logcat \| grep zmmo`, verify Magisk module active |
-| IMEI still shows real | Property name mismatch | Check `adb shell getprop \| grep persist.zmmo` |
-| No SIM detected | RILJ hook breaking RIL | Restore original `telephony-common.jar`, retry with newer baksmali |
-| `persist.*` not persisting | Needs `persist` partition support | Fall back to `setprop` at boot via init.rc |
-
-## File Structure
-
-```
-packages/rom-patcher/
-├── build.sh                      # Main entry point
-├── README.md
-├── config/
-│   └── default-props.json        # Default spoof values
-├── patches/
-│   ├── telephony-common/         # RILJ hooks
-│   │   ├── IccCardProxy.smali.patch
-│   │   ├── UiccCardApplication.smali.patch
-│   │   ├── PhoneBase.smali.patch
-│   │   └── ServiceStateTracker.smali.patch
-│   └── framework/                # Framework hooks
-│       ├── Build.smali.patch
-│       ├── TelephonyManager.smali.patch
-│       ├── ZmmoProps.smali       # NEW helper class
-│       └── ZmmoTelephony.smali   # NEW helper class
-├── magisk/                       # Magisk module template
-│   └── module.prop
-└── scripts/                      # Toolchain
-    ├── extract-framework.sh
-    ├── deodex.sh
-    ├── patch.sh
-    └── repack-magisk.sh
-```
+- **SafetyNet/Play Integrity** — needs separate PIF module
+- **Modem-level IMEI** — `*#06#` may show real IMEI on some devices
+- **MIUI/HyperOS** — custom RILJ, not supported
+- **Samsung stock ROM** — Knox protects framework; use LineageOS
