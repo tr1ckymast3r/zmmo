@@ -1,67 +1,37 @@
-"use client";
-
-import Link from "next/link";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 const VERSION = "1.1.1";
 
 const DOWNLOADS = [
-  {
-    platform: "Windows",
-    arch: "x64",
-    icon: "\u{1FA9F}",
-    file: "zmmo-agent-windows-amd64.exe",
-    ext: ".exe",
-    desc: "Windows 10 / 11 (64-bit)",
-  },
-  {
-    platform: "macOS",
-    arch: "Intel",
-    icon: "\u{1F34E}",
-    file: "zmmo-agent-darwin-amd64",
-    ext: "",
-    desc: "macOS Intel (x64)",
-  },
-  {
-    platform: "macOS",
-    arch: "Apple Silicon",
-    icon: "\u{1F34F}",
-    file: "zmmo-agent-darwin-arm64",
-    ext: "",
-    desc: "macOS M1 / M2 / M3 / M4",
-  },
-  {
-    platform: "Linux",
-    arch: "x64",
-    icon: "\u{1F427}",
-    file: "zmmo-agent-linux-amd64",
-    ext: "",
-    desc: "Ubuntu, Debian, RHEL (x64)",
-  },
+  { platform: "Windows", arch: "x64", icon: "\u{1FA9F}", file: "zmmo-agent-windows-amd64.exe", ext: ".exe", desc: "Windows 10 / 11 (64-bit)" },
+  { platform: "macOS", arch: "Intel", icon: "\u{1F34E}", file: "zmmo-agent-darwin-amd64", ext: "", desc: "macOS Intel (x64)" },
+  { platform: "macOS", arch: "Apple Silicon", icon: "\u{1F34F}", file: "zmmo-agent-darwin-arm64", ext: "", desc: "macOS M1 / M2 / M3 / M4" },
+  { platform: "Linux", arch: "x64", icon: "\u{1F427}", file: "zmmo-agent-linux-amd64", ext: "", desc: "Ubuntu, Debian, RHEL (x64)" },
 ];
 
-export default function DownloadsPage() {
+export const Route = createFileRoute("/downloads")({
+  component: DownloadsPage,
+});
+
+function DownloadsPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Header */}
       <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur">
         <div className="flex items-center justify-between h-14 px-3 sm:px-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
-              href="/"
+              to="/"
               className="font-semibold text-sm sm:text-base tracking-tight flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
-              <span className="w-7 h-7 rounded-md bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                DC
-              </span>
+              <span className="w-7 h-7 rounded-md bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-xs font-bold">DC</span>
               <span className="hidden sm:inline">Device Changer</span>
             </Link>
             <span className="text-zinc-500 text-sm hidden sm:inline">/</span>
             <span className="text-zinc-300 text-sm hidden sm:inline font-medium">Downloads</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 font-mono">v{VERSION}</span>
           </div>
-
           <Link
-            href="/"
+            to="/"
             className="h-7 text-[10px] sm:text-xs text-zinc-400 hover:text-zinc-200 px-2 flex items-center gap-1 rounded-lg hover:bg-zinc-800 transition-colors"
           >
             &larr; Back to Dashboard
@@ -103,11 +73,9 @@ export default function DownloadsPage() {
           ))}
         </div>
 
-        {/* Instructions */}
         <div className="mt-8 p-4 rounded-xl bg-zinc-900 border border-zinc-800">
           <h3 className="text-sm font-medium mb-2">Setup Instructions</h3>
           <div className="text-xs text-zinc-400 space-y-3">
-
             <div>
               <span className="font-medium text-zinc-300">Windows — Easiest (PowerShell one-liner)</span>
               <div className="mt-1 p-2 rounded bg-zinc-950 border border-zinc-800 font-mono text-[10px] text-emerald-400 break-all">
@@ -117,55 +85,20 @@ export default function DownloadsPage() {
                 <code className="text-emerald-400">Unblock-File</code> removes the SmartScreen warning so it runs clean
               </p>
             </div>
-
-            <div>
-              <span className="font-medium text-zinc-300">Windows — Manual download</span>
-              <ol className="list-decimal ml-4 mt-0.5 space-y-0.5">
-                <li>Download the .exe above</li>
-                <li><strong>Right-click file &rarr; Properties &rarr; Check &quot;Unblock&quot; &rarr; OK</strong></li>
-                <li>Double-click to run &mdash; terminal opens on port 55555</li>
-              </ol>
-            </div>
-
             <div>
               <span className="font-medium text-zinc-300">macOS</span>
               <ol className="list-decimal ml-4 mt-0.5 space-y-0.5">
                 <li>Download the binary for your Mac</li>
-                <li>Open Terminal:
-                  <code className="block text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded mt-0.5">
-                    xattr -d com.apple.quarantine ~/Downloads/zmmo-agent-darwin-* && chmod +x ~/Downloads/zmmo-agent-darwin-*
-                  </code>
-                </li>
+                <li>Open Terminal: <code className="block text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded mt-0.5">xattr -d com.apple.quarantine ~/Downloads/zmmo-agent-darwin-* && chmod +x ~/Downloads/zmmo-agent-darwin-*</code></li>
                 <li>Run: <code className="text-[10px] bg-zinc-800 px-1 py-0.5 rounded">~/Downloads/zmmo-agent-darwin-arm64</code></li>
-                <li>If still blocked: System Settings &rarr; Privacy & Security &rarr; Allow Anyway</li>
               </ol>
             </div>
-
             <div>
               <span className="font-medium text-zinc-300">Linux</span>
               <ol className="list-decimal ml-4 mt-0.5 space-y-0.5">
                 <li><code className="text-[10px] bg-zinc-800 px-1 py-0.5 rounded">chmod +x zmmo-agent-linux-amd64 && ./zmmo-agent-linux-amd64</code></li>
               </ol>
             </div>
-
-            <div className="pt-2 border-t border-zinc-800">
-              <p className="font-medium text-zinc-300 text-[11px] mb-1">
-                Why the warning? How to fix permanently?
-              </p>
-              <p className="text-[10px] text-zinc-500">
-                Windows SmartScreen and macOS Gatekeeper flag unsigned binaries downloaded from the internet.
-                The <strong className="text-zinc-400">Unblock-File</strong> / <strong className="text-zinc-400">xattr</strong> commands above remove the &quot;downloaded from internet&quot; marker.
-                <br /><br />
-                <strong className="text-zinc-400">Permanent fix:</strong> Code signing certificate (EV ~$300-400/year from DigiCert/Sectigo).
-                Once signed, no warnings appear on any machine. Contact us if you need a signed build.
-              </p>
-            </div>
-
-            <p className="text-zinc-500">
-              After starting the agent, open{" "}
-              <Link href="/" className="text-blue-400 hover:underline">the dashboard</Link>{" "}
-              to manage your devices.
-            </p>
           </div>
         </div>
       </main>

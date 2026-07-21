@@ -1,15 +1,16 @@
 {
-  "name": "zmmo",
-  "version": "1.0.0",
+  "name": "zmmo-device-changer",
   "private": true,
-  "description": "ZMMO — Android Device Identity Management Suite (Monorepo)",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.6"
+  },
+  "packageManager": "npm@10.9.2",
   "workspaces": [
     "packages/*"
-  ],
-  "scripts": {
-    "dev": "npm run dev --workspace=packages/panel",
-    "build": "npm run build --workspace=packages/panel",
-    "agent:build": "cd packages/manager-agent && go build -o manager-agent .",
-    "agent:dev": "cd packages/manager-agent && go run ."
-  }
+  ]
 }

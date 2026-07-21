@@ -1,65 +1,80 @@
-"use client";
-
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DeviceInfo, AgentStatus } from "@/types/device";
 import { getAgentStatus, getDevices, resetPort } from "@/lib/api";
-import { DeviceGrid } from "@/components/DeviceGrid";
 import { DeviceDetail } from "@/components/DeviceDetail";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
+import { TaskRunner } from "@/components/TaskRunner";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { TaskRunner } from "@/components/TaskRunner";
 
-export default function Home() {
-  const [agent, setAgent] = useState<AgentStatus | null>(null);
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+export const Route = createFileRoute("/")({
+  component: Dashboard,
+});
+
+function Dashboard() {
+  const queryClient = useQueryClient();
   const [selectedDevice, setSelectedDevice] = useState<DeviceInfo | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const [a, d] = await Promise.all([getAgentStatus(), getDevices()]);
-      setAgent(a);
-      setDevices(d);
-      // Update selected device if it still exists
-      if (selectedDevice) {
-        const updated = d.find((x) => x.id === selectedDevice.id);
-        setSelectedDevice(updated ?? (d.length > 0 ? d[0] : null));
-      } else if (d.length > 0) {
-        setSelectedDevice(d[0]);
-      }
-      setError(null);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Connection failed";
-      if (!msg.includes("Agent not running")) {
-        setError(msg);
-      }
-      setAgent(null);
-      setDevices([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedDevice]);
+  // TanStack Query for agent status
+  const agentQuery = useQuery({
+    queryKey: ["agent-status"],
+    queryFn: getAgentStatus,
+    refetchInterval: 10000,
+    retry: false,
+  });
 
+  // TanStack Query for devices
+  const devicesQuery = useQuery({
+    queryKey: ["devices"],
+    queryFn: getDevices,
+    refetchInterval: 10000,
+    retry: false,
+  });
+
+  const agent = agentQuery.data ?? null;
+  const devices = devicesQuery.data ?? [];
+  const loading = agentQuery.isLoading || devicesQuery.isLoading;
+
+  // Auto-select first device
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 10000);
-    return () => clearInterval(interval);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (devices.length > 0 && !selectedDevice) {
+      setSelectedDevice(devices[0]);
+    }
+    // Update selected if it changed
+    if (selectedDevice) {
+      const updated = devices.find((d) => d.id === selectedDevice.id);
+      if (updated) setSelectedDevice(updated);
+    }
+  }, [devices]);
+
+  // Handle agent errors
+  useEffect(() => {
+    const agentErr = agentQuery.error;
+    const devicesErr = devicesQuery.error;
+    const msg = agentErr ? (agentErr instanceof Error ? agentErr.message : "Agent error") :
+                devicesErr ? (devicesErr instanceof Error ? devicesErr.message : "Device error") : null;
+    if (msg && !msg.includes("Agent not running")) {
+      setError(msg);
+    } else if (!msg) {
+      setError(null);
+    }
+  }, [agentQuery.error, devicesQuery.error]);
 
   const handleReconnect = () => {
     resetPort();
-    setLoading(true);
-    refresh();
+    queryClient.invalidateQueries({ queryKey: ["agent-status"] });
+    queryClient.invalidateQueries({ queryKey: ["devices"] });
     toast.info("Reconnecting to agent...");
   };
 
   const handleDeviceUpdated = (device: DeviceInfo) => {
-    setDevices((prev) => prev.map((d) => (d.id === device.id ? device : d)));
     setSelectedDevice(device);
+    queryClient.invalidateQueries({ queryKey: ["devices"] });
   };
 
   return (
@@ -124,12 +139,7 @@ export default function Home() {
               />
               <TaskRunner selectedDevice={selectedDevice.id} />
             </div>
-          ) : (
-            <DeviceGrid
-              devices={devices}
-              onSelect={setSelectedDevice}
-            />
-          )}
+          ) : null}
         </main>
       </div>
 
