@@ -1,27 +1,13 @@
-// API client for manager-agent backend (localhost:55555 / :55556)
+// API client for manager-agent backend
+// Uses Vite proxy in dev (/api → http://127.0.0.1:55555)
+// In production, agent serves CORS wide open on same host
 
 import type { AgentStatus, DeviceInfo, DeviceProps, Task, BackupInfo } from "@/types/device";
 
-const AGENT_PORTS = [55555, 55556];
-let activePort: number | null = null;
-
-async function detectPort(): Promise<number> {
-  if (activePort) return activePort;
-  for (const port of AGENT_PORTS) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/status`, { signal: AbortSignal.timeout(2000) });
-      if (res.ok) {
-        activePort = port;
-        return port;
-      }
-    } catch {}
-  }
-  throw new Error("Agent not running on any port (55555, 55556)");
-}
+const BASE_URL = "/api";
 
 async function apiCall<T>(path: string, options?: RequestInit): Promise<T> {
-  const port = await detectPort();
-  const url = `http://127.0.0.1:${port}${path}`;
+  const url = `${BASE_URL}${path}`;
   const res = await fetch(url, {
     ...options,
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -59,7 +45,7 @@ export async function applyDeviceProps(id: string): Promise<{ ok: boolean }> {
   return apiCall(`/devices/${id}/apply`, { method: "POST" });
 }
 
-// ── Tasks (ADB, backup, restore, license...) ──
+// ── Tasks ──
 export async function getTasks(): Promise<Task[]> {
   return apiCall<Task[]>("/tasks");
 }
@@ -80,10 +66,15 @@ export async function getBackups(): Promise<BackupInfo[]> {
   return apiCall<BackupInfo[]>("/backups");
 }
 
-export async function createBackup(deviceId: string, props: DeviceProps): Promise<BackupInfo> {
-  return apiCall<BackupInfo>("/backups", {
+export async function createBackup(
+  deviceId: string,
+  props?: any,
+  packages?: string[],
+  targetDir?: string
+): Promise<{ ok: boolean; backup: BackupInfo }> {
+  return apiCall("/backups", {
     method: "POST",
-    body: JSON.stringify({ deviceId, props }),
+    body: JSON.stringify({ deviceId, packages: packages ?? [], targetDir }),
   });
 }
 
@@ -123,7 +114,12 @@ export async function refreshDeviceMeta(
   return apiCall(`/devices/${deviceId}/refresh-meta`, { method: "POST" });
 }
 
-// ── Utility: reset active port (when agent restarts) ──
-export function resetPort() {
-  activePort = null;
+// ── Packages ──
+export interface PackageInfo {
+  package: string;
+  name: string;
+}
+
+export async function getPackages(deviceId: string): Promise<PackageInfo[]> {
+  return apiCall<PackageInfo[]>(`/packages/${deviceId}`);
 }

@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BackupsRouteImport } from './routes/backups'
 import { Route as DownloadsRouteImport } from './routes/downloads'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BackupsRoute = BackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DownloadsRoute = DownloadsRouteImport.update({
@@ -25,27 +31,31 @@ const DownloadsRoute = DownloadsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/backups': typeof BackupsRoute
   '/downloads': typeof DownloadsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/backups': typeof BackupsRoute
   '/downloads': typeof DownloadsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/backups': typeof BackupsRoute
   '/downloads': typeof DownloadsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/downloads'
+  fullPaths: '/' | '/backups' | '/downloads'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/downloads'
-  id: '__root__' | '/' | '/downloads'
+  to: '/' | '/backups' | '/downloads'
+  id: '__root__' | '/' | '/backups' | '/downloads'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BackupsRoute: typeof BackupsRoute
   DownloadsRoute: typeof DownloadsRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/backups': {
+      id: '/backups'
+      path: '/backups'
+      fullPath: '/backups'
+      preLoaderRoute: typeof BackupsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/downloads': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BackupsRoute: BackupsRoute,
   DownloadsRoute: DownloadsRoute,
 }
 export const routeTree = rootRouteImport

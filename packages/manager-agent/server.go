@@ -106,10 +106,13 @@ type Task struct {
 type BackupInfo struct {
 	ID        string      `json:"id"`
 	DeviceID  string      `json:"deviceId"`
+	DeviceSerial string   `json:"deviceSerial,omitempty"`
 	Filename  string      `json:"filename"`
 	Size      int64       `json:"size"`
+	Packages  []string    `json:"packages,omitempty"`
 	Props     DeviceProps `json:"props"`
 	CreatedAt string      `json:"createdAt"`
+	TargetDir string      `json:"targetDir,omitempty"`
 }
 
 // ── Global State ──
@@ -131,7 +134,7 @@ var (
 	pollerStop   chan struct{}
 )
 
-const version = "1.1.1"
+const version = "1.2.0"
 
 // ── ADB Helpers ──
 
@@ -922,26 +925,166 @@ func executeTask(task *Task) {
 	task.UpdatedAt = time.Now().Format(time.RFC3339)
 }
 
-func handleBackups(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		writeError(w, 405, "method not allowed")
+// ── Package Listing ──
+
+func handlePackages(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/packages/"), "/")
+	if len(parts) < 1 || parts[0] == "" {
+		writeError(w, 400, "device id required: /packages/:deviceId")
 		return
 	}
-	backupsMu.RLock()
-	list := make([]BackupInfo, 0, len(backups))
-	for _, b := range backups {
-		list = append(list, *b)
+	deviceID := parts[0]
+
+	out, err := adbShell(deviceID, "pm list packages -3 -f")
+	if err != nil {
+		writeError(w, 500, "failed to list packages: "+err.Error())
+		return
 	}
-	backupsMu.RUnlock()
-	writeJSON(w, list)
+	type PkgInfo struct {
+		Package string `json:"package"`
+		Name    string `json:"name"`
+	}
+	var pkgs []PkgInfo
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "package:") {
+			continue
+		}
+		// "package:/data/app/com.example==/base.apk=com.example"
+		line = strings.TrimPrefix(line, "package:")
+		parts := strings.Split(line, "=")
+		if len(parts) >= 1 {
+			pkg := parts[len(parts)-1] // last segment is the package name
+			if pkg != "" {
+				pkgs = append(pkgs, PkgInfo{Package: pkg, Name: pkg})
+			}
+		}
+	}
+	writeJSON(w, pkgs)
+}
+
+// ── Backups (full userdata backup/restore) ──
+
+func handleBackups(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		backupsMu.RLock()
+		list := make([]BackupInfo, 0, len(backups))
+		for _, b := range backups {
+			list = append(list, *b)
+		}
+		backupsMu.RUnlock()
+		writeJSON(w, list)
+
+	case "POST":
+		var body struct {
+			DeviceID string   `json:"deviceId"`
+			Packages []string `json:"packages,omitempty"`
+			TargetDir string  `json:"targetDir,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, 400, "invalid JSON")
+			return
+		}
+		if body.DeviceID == "" {
+			writeError(w, 400, "deviceId required")
+			return
+		}
+		if len(body.Packages) == 0 {
+			writeError(w, 400, "at least one package required")
+			return
+		}
+
+		id := uuid.New().String()
+		timestamp := time.Now().Format("20060102_150405")
+		filename := fmt.Sprintf("zmmo-backup-%s.tar.gz", timestamp)
+		
+		targetDir := body.TargetDir
+		if targetDir == "" {
+			targetDir = "./backups"
+		}
+		os.MkdirAll(targetDir, 0755)
+		localPath := filepath.Join(targetDir, filename)
+
+		serial := getDeviceSerial(body.DeviceID)
+
+		// Build tar command on device
+		var dataPaths []string
+		for _, pkg := range body.Packages {
+			dataPaths = append(dataPaths, fmt.Sprintf("/data/data/%s", pkg))
+		}
+		tarCmd := fmt.Sprintf("tar czf /data/local/tmp/%s %s 2>/dev/null", filename, strings.Join(dataPaths, " "))
+		
+		log.Printf("[backup:%s] creating tar on device %s: %s", id, serial, tarCmd)
+		_, err := adbShell(body.DeviceID, tarCmd)
+		if err != nil {
+			writeError(w, 500, "tar on device failed: "+err.Error())
+			return
+		}
+
+		// Pull tar from device
+		log.Printf("[backup:%s] pulling %s → %s", id, filename, localPath)
+		err = adbPull(body.DeviceID, "/data/local/tmp/"+filename, localPath)
+		if err != nil {
+			adbShell(body.DeviceID, "rm -f /data/local/tmp/"+filename)
+			writeError(w, 500, "pull failed: "+err.Error())
+			return
+		}
+
+		// Clean up device temp file
+		adbShell(body.DeviceID, "rm -f /data/local/tmp/"+filename)
+
+		// Get file size
+		fi, err := os.Stat(localPath)
+		size := int64(0)
+		if err == nil {
+			size = fi.Size()
+		}
+
+		backup := &BackupInfo{
+			ID:           id,
+			DeviceID:     body.DeviceID,
+			DeviceSerial: serial,
+			Filename:     filename,
+			Size:         size,
+			Packages:     body.Packages,
+			Props:        DeviceProps{},
+			CreatedAt:    time.Now().Format(time.RFC3339),
+			TargetDir:    targetDir,
+		}
+
+		// Load current device props into backup
+		deviceMu.RLock()
+		if dev, ok := devices[body.DeviceID]; ok && dev.Props != nil {
+			backup.Props = *dev.Props
+		}
+		deviceMu.RUnlock()
+
+		backupsMu.Lock()
+		backups[id] = backup
+		backupsMu.Unlock()
+
+		log.Printf("[backup:%s] done — %d bytes, %d packages", id, size, len(body.Packages))
+		writeJSON(w, map[string]interface{}{"ok": true, "backup": backup})
+
+	default:
+		writeError(w, 405, "method not allowed")
+	}
 }
 
 func handleBackupRestore(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/backups/"), "/")
-	if len(parts) < 2 || parts[1] != "restore" {
-		writeError(w, 404, "not found")
+	if r.Method != "POST" {
+		writeError(w, 405, "method not allowed")
 		return
 	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/backups/"), "/")
+	if len(parts) < 2 || parts[1] != "restore" {
+		writeError(w, 404, "not found — use /backups/:id/restore")
+		return
+	}
+	backupID := parts[0]
+
 	var body struct {
 		DeviceID string `json:"deviceId"`
 	}
@@ -949,15 +1092,83 @@ func handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid JSON")
 		return
 	}
+	if body.DeviceID == "" {
+		writeError(w, 400, "deviceId required")
+		return
+	}
+
 	backupsMu.RLock()
-	backup, ok := backups[parts[0]]
+	backup, ok := backups[backupID]
 	backupsMu.RUnlock()
 	if !ok {
 		writeError(w, 404, "backup not found")
 		return
 	}
-	applyProps(body.DeviceID, &backup.Props)
-	writeJSON(w, map[string]bool{"ok": true})
+
+	localPath := filepath.Join(backup.TargetDir, backup.Filename)
+	if backup.TargetDir == "" {
+		localPath = filepath.Join("./backups", backup.Filename)
+	}
+
+	// Check file exists
+	if _, err := os.Stat(localPath); os.IsNotExist(err) {
+		writeError(w, 404, "backup file not found on disk: "+localPath)
+		return
+	}
+
+	// Stop apps before restore
+	for _, pkg := range backup.Packages {
+		adbShell(body.DeviceID, "am force-stop "+pkg)
+	}
+
+	// Push tar to device
+	remotePath := "/data/local/tmp/" + backup.Filename
+	log.Printf("[restore:%s] pushing %s → %s", backupID, localPath, remotePath)
+	err := adbPush(body.DeviceID, localPath, remotePath)
+	if err != nil {
+		writeError(w, 500, "push failed: "+err.Error())
+		return
+	}
+
+	// Extract on device
+	extractCmd := fmt.Sprintf("tar xzf %s -C /data/data/ 2>/dev/null", remotePath)
+	log.Printf("[restore:%s] extracting: %s", backupID, extractCmd)
+	_, err = adbShell(body.DeviceID, extractCmd)
+	if err != nil {
+		writeError(w, 500, "extract failed: "+err.Error())
+		adbShell(body.DeviceID, "rm -f "+remotePath)
+		return
+	}
+
+	// Fix permissions (set owner back to each package's UID)
+	for _, pkg := range backup.Packages {
+		adbShell(body.DeviceID, fmt.Sprintf("chown -R $(stat -c %%u /data/data/%s 2>/dev/null || echo 1000):$(stat -c %%g /data/data/%s 2>/dev/null || echo 1000) /data/data/%s 2>/dev/null", pkg, pkg, pkg))
+	}
+
+	// Clean up
+	adbShell(body.DeviceID, "rm -f "+remotePath)
+
+	log.Printf("[restore:%s] done — %d packages restored to %s", backupID, len(backup.Packages), body.DeviceID)
+	writeJSON(w, map[string]interface{}{"ok": true, "restored": len(backup.Packages)})
+}
+
+// ── ADB helpers for push/pull ──
+
+func adbPull(deviceID, remotePath, localPath string) error {
+	return cmdHide("adb", "-s", deviceID, "pull", remotePath, localPath).Run()
+}
+
+func adbPush(deviceID, localPath, remotePath string) error {
+	return cmdHide("adb", "-s", deviceID, "push", localPath, remotePath).Run()
+}
+
+func getDeviceSerial(deviceID string) string {
+	deviceMu.RLock()
+	defer deviceMu.RUnlock()
+	if dev, ok := devices[deviceID]; ok {
+		return dev.Serial
+	}
+	return deviceID
 }
 
 func handleADB(w http.ResponseWriter, r *http.Request) {
@@ -1020,6 +1231,7 @@ func startServer() error {
 			handleBackupRestore(w, r)
 		}
 	})
+	mux.HandleFunc("/packages/", handlePackages)
 	mux.HandleFunc("/adb/", handleADB)
 	mux.HandleFunc("/license/activate", handleLicenseActivate)
 

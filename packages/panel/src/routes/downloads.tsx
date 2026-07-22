@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-const VERSION = "1.1.1";
+const VERSION = "1.2.0";
 
 const DOWNLOADS = [
   { platform: "Windows", arch: "x64", icon: "\u{1FA9F}", file: "zmmo-agent-windows-amd64.exe", ext: ".exe", desc: "Windows 10 / 11 (64-bit)" },

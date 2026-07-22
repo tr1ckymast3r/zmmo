@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DeviceInfo, AgentStatus } from "@/types/device";
-import { getAgentStatus, getDevices, resetPort } from "@/lib/api";
+import { getAgentStatus, getDevices } from "@/lib/api";
 import { DeviceDetail } from "@/components/DeviceDetail";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
@@ -66,7 +66,6 @@ function Dashboard() {
   }, [agentQuery.error, devicesQuery.error]);
 
   const handleReconnect = () => {
-    resetPort();
     queryClient.invalidateQueries({ queryKey: ["agent-status"] });
     queryClient.invalidateQueries({ queryKey: ["devices"] });
     toast.info("Reconnecting to agent...");
