@@ -1,13 +1,26 @@
 // API client for manager-agent backend
-// Uses Vite proxy in dev (/api → http://127.0.0.1:55555)
-// In production, agent serves CORS wide open on same host
+// Uses localStorage "zmmo-endpoint" if set, otherwise Vite proxy /api
 
 import type { AgentStatus, DeviceInfo, DeviceProps, Task, BackupInfo } from "@/types/device";
 
-const BASE_URL = "/api";
+function getBaseUrl(): string {
+  try {
+    const ep = localStorage.getItem("zmmo-endpoint");
+    if (ep) return ep.replace(/\/+$/, "");
+  } catch {}
+  return "/api";
+}
+
+export function getEndpoint(): string {
+  return getBaseUrl();
+}
+
+export function setEndpoint(url: string) {
+  localStorage.setItem("zmmo-endpoint", url);
+}
 
 async function apiCall<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${BASE_URL}${path}`;
+  const url = `${getBaseUrl()}${path}`;
   const res = await fetch(url, {
     ...options,
     headers: { "Content-Type": "application/json", ...options?.headers },
