@@ -1,0 +1,5 @@
+# Binaries
+fingerprint-api
+*.db
+*.db-shm
+*.db-wal
