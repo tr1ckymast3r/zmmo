@@ -1,0 +1,11 @@
+Package: com.zmmo.iosag
+Name: ZMMO iOS AG
+Version: 0.1.0
+Architecture: iphoneos-arm64e
+Description: ZMMO Device Changer — XoaInfo-based agent.
+ RocketBootstrap daemon + profiled hook (IMEI/MobileGestalt).
+ RRS: keychain wipe, app data backup/restore, per-app spoofing.
+Depends: firmware (>= 12.0), mobilesubstrate, com.rpetrich.rocketbootstrap, curl, openssh
+Maintainer: ZMMO
+Author: ZMMO
+Section: Utilities

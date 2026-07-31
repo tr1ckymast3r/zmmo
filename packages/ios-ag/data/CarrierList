@@ -1,0 +1,139 @@
+Afghanistan|AWCC|412|1|AF|GSM
+Afghanistan|Roshan|412|20|AF|GSM
+Afghanistan|MTN|412|40|AF|GSM
+Afghanistan|Etisalat|412|50|AF|GSM
+Albania|ALBtelecom|276|1|AL|GSM
+Albania|Vodafone|276|2|AL|GSM
+Albania|Eagle Mobile|276|3|AL|GSM
+Algeria|Mobilis|603|1|DZ|GSM
+Algeria|Djezzy|603|2|DZ|GSM
+Algeria|Ooredoo|603|3|DZ|GSM
+Angola|Movicel|631|1|AO|GSM
+Angola|Unitel|631|2|AO|GSM
+Argentina|Claro|722|310|AR|GSM
+Argentina|Movistar|722|70|AR|GSM
+Argentina|Personal|722|34|AR|GSM
+Australia|Telstra|505|1|AU|GSM
+Australia|Optus|505|2|AU|GSM
+Australia|Vodafone|505|3|AU|GSM
+Austria|A1|232|1|AT|GSM
+Austria|Magenta|232|3|AT|GSM
+Austria|Drei|232|10|AT|GSM
+Bangladesh|Grameenphone|470|1|BD|GSM
+Bangladesh|Robi|470|2|BD|GSM
+Bangladesh|Banglalink|470|3|BD|GSM
+Belgium|Proximus|206|1|BE|GSM
+Belgium|Orange|206|10|BE|GSM
+Belgium|Base|206|20|BE|GSM
+Brazil|Vivo|724|6|BR|GSM
+Brazil|Claro|724|5|BR|GSM
+Brazil|TIM|724|4|BR|GSM
+Brazil|Oi|724|31|BR|GSM
+Cambodia|Cellcard|456|1|KH|GSM
+Cambodia|Smart|456|2|KH|GSM
+Cambodia|Metfone|456|8|KH|GSM
+Canada|Bell|302|610|CA|GSM
+Canada|Rogers|302|720|CA|GSM
+Canada|Telus|302|220|CA|GSM
+China|China Mobile|460|0|CN|GSM
+China|China Unicom|460|1|CN|GSM
+China|China Telecom|460|3|CN|CDMA
+Colombia|Claro|732|101|CO|GSM
+Colombia|Movistar|732|123|CO|GSM
+Colombia|Tigo|732|103|CO|GSM
+Egypt|Vodafone|602|2|EG|GSM
+Egypt|Orange|602|1|EG|GSM
+Egypt|Etisalat|602|3|EG|GSM
+France|Orange|208|1|FR|GSM
+France|SFR|208|10|FR|GSM
+France|Bouygues|208|20|FR|GSM
+France|Free|208|15|FR|GSM
+Germany|Telekom|262|1|DE|GSM
+Germany|Vodafone|262|2|DE|GSM
+Germany|O2|262|3|DE|GSM
+India|Airtel|404|2|IN|GSM
+India|Vodafone Idea|404|4|IN|GSM
+India|Jio|405|840|IN|LTE
+India|BSNL|404|53|IN|GSM
+Indonesia|Telkomsel|510|10|ID|GSM
+Indonesia|Indosat|510|1|ID|GSM
+Indonesia|XL Axiata|510|11|ID|GSM
+Indonesia|Tri|510|89|ID|GSM
+Italy|TIM|222|1|IT|GSM
+Italy|Vodafone|222|10|IT|GSM
+Italy|Wind Tre|222|88|IT|GSM
+Japan|NTT docomo|440|10|JP|GSM
+Japan|KDDI au|440|50|JP|CDMA
+Japan|SoftBank|440|20|JP|GSM
+Malaysia|Maxis|502|12|MY|GSM
+Malaysia|Celcom|502|19|MY|GSM
+Malaysia|Digi|502|16|MY|GSM
+Malaysia|U Mobile|502|18|MY|GSM
+Mexico|Telcel|334|2|MX|GSM
+Mexico|Movistar|334|3|MX|GSM
+Mexico|AT&T|334|50|MX|GSM
+Myanmar|MPT|414|1|MM|GSM
+Myanmar|Telenor|414|3|MM|GSM
+Myanmar|Ooredoo|414|5|MM|GSM
+Netherlands|KPN|204|8|NL|GSM
+Netherlands|Vodafone|204|4|NL|GSM
+Netherlands|T-Mobile|204|16|NL|GSM
+Nigeria|MTN|621|30|NG|GSM
+Nigeria|Glo|621|50|NG|GSM
+Nigeria|Airtel|621|20|NG|GSM
+Nigeria|9mobile|621|60|NG|GSM
+Pakistan|Jazz|410|1|PK|GSM
+Pakistan|Telenor|410|6|PK|GSM
+Pakistan|Zong|410|4|PK|GSM
+Pakistan|Ufone|410|3|PK|GSM
+Philippines|Globe|515|2|PH|GSM
+Philippines|Smart|515|3|PH|GSM
+Philippines|DITO|515|66|PH|GSM
+Poland|Orange|260|3|PL|GSM
+Poland|Play|260|6|PL|GSM
+Poland|T-Mobile|260|2|PL|GSM
+Poland|Plus|260|1|PL|GSM
+Russia|MTS|250|1|RU|GSM
+Russia|MegaFon|250|2|RU|GSM
+Russia|Beeline|250|99|RU|GSM
+Saudi Arabia|STC|420|1|SA|GSM
+Saudi Arabia|Mobily|420|3|SA|GSM
+Saudi Arabia|Zain|420|4|SA|GSM
+Singapore|Singtel|525|1|SG|GSM
+Singapore|StarHub|525|5|SG|GSM
+Singapore|M1|525|3|SG|GSM
+South Africa|Vodacom|655|1|ZA|GSM
+South Africa|MTN|655|10|ZA|GSM
+South Africa|Cell C|655|7|ZA|GSM
+South Korea|SK Telecom|450|5|KR|GSM
+South Korea|KT|450|2|KR|GSM
+South Korea|LG U+|450|6|KR|LTE
+Spain|Movistar|214|7|ES|GSM
+Spain|Vodafone|214|1|ES|GSM
+Spain|Orange|214|3|ES|GSM
+Switzerland|Swisscom|228|1|CH|GSM
+Switzerland|Sunrise|228|2|CH|GSM
+Switzerland|Salt|228|3|CH|GSM
+Thailand|AIS|520|1|TH|GSM
+Thailand|TrueMove H|520|0|TH|GSM
+Thailand|dtac|520|18|TH|GSM
+Turkey|Turkcell|286|1|TR|GSM
+Turkey|Vodafone|286|2|TR|GSM
+Turkey|Turk Telekom|286|3|TR|GSM
+UAE|Etisalat|424|2|AE|GSM
+UAE|du|424|3|AE|GSM
+UK|EE|234|30|GB|GSM
+UK|Vodafone|234|15|GB|GSM
+UK|O2|234|10|GB|GSM
+UK|Three|234|20|GB|GSM
+Ukraine|Kyivstar|255|3|UA|GSM
+Ukraine|Vodafone|255|1|UA|GSM
+Ukraine|lifecell|255|6|UA|GSM
+USA|AT&T|310|410|US|GSM
+USA|Verizon|310|4|US|CDMA
+USA|T-Mobile|310|260|US|GSM
+USA|Sprint|310|120|US|GSM
+Vietnam|Viettel|452|4|VN|GSM
+Vietnam|Vinaphone|452|2|VN|GSM
+Vietnam|Mobifone|452|1|VN|GSM
+Vietnam|Vietnamobile|452|5|VN|GSM

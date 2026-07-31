@@ -1,0 +1,28 @@
+# ZMMO ios-ag — Linux cross-compile (clang + ld64.lld)
+SDK        = /opt/theos/sdks/iPhoneOS12.1.sdk
+TARGET     = arm64-apple-ios12.1
+CC         = clang
+CXX        = clang++
+LD         = ld64.lld
+CFLAGS     = -target $(TARGET) -isysroot $(SDK) -Wall -O2 -fobjc-arc
+LDFLAGS    = -arch arm64 -platform_version ios 12.1 0 -syslibroot $(SDK)
+LDLIBS     = -lSystem -lobjc -lz
+FW         = -framework Foundation -framework CoreFoundation -framework IOKit -framework Security -framework UIKit
+PRIVFW     = -framework CoreTelephony
+AGENT_SRC  = agent/main.mm agent/XAGDaemon.mm agent/XAGDeviceInfo.mm agent/XAGSpoofer.mm agent/XAGRRS.mm
+AGENT_OBJ  = $(AGENT_SRC:.mm=.o)
+
+zmmo-ag: $(AGENT_OBJ)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $(FW) $(PRIVFW)
+
+%.o: %.mm
+	$(CXX) $(CFLAGS) -c -o $@ $<
+
+# Tweaks require Theos/Logos preprocessing — not possible on Linux directly
+tweak: agent/*.o
+	@echo "Tweaks require Theos Logos → build on macOS with 'make package'"
+
+clean:
+	rm -f zmmo-ag $(AGENT_OBJ)
+
+all: zmmo-ag

@@ -1,0 +1,18 @@
+#!/bin/sh
+# ZMMO ios-ag postinst
+set -e
+echo "[XAG] Installing ios-ag..."
+mkdir -p /var/mobile/Library/Preferences
+mkdir -p /var/mobile/ZMMO_RRS
+
+PLIST="/Library/LaunchDaemons/com.zmmo.iosag.plist"
+if [ -f "$PLIST" ]; then
+    launchctl load -w "$PLIST" 2>/dev/null || \
+    launchctl bootstrap system "$PLIST" 2>/dev/null || true
+fi
+
+# Kill relevant services to force reload with hooks
+killall -9 SpringBoard backboardd 2>/dev/null || true
+
+echo "[XAG] ios-ag installed — RocketBootstrap daemon + 2 plugs"
+exit 0

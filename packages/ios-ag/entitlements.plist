@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>platform-application</key>
+	<false/>
+	<key>get-task-allow</key>
+	<true/>
+	<key>run-unsigned-code</key>
+	<true/>
+	<key>dynamic-codesigning</key>
+	<true/>
+	<key>com.apple.private.MobileGestalt.AllowedProtectedKeys</key>
+	<true/>
+	<key>com.apple.coretelephony.Identity.get</key>
+	<true/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>com.apple.identities</string>
+	</array>
+	<key>proc_info-allow</key>
+	<true/>
+	<key>com.apple.private.skip-library-validation</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<key>com.apple.locationd.authorizeapplications</key>
+	<true/>
+	<key>com.apple.locationd.effective_bundle</key>
+	<true/>
+	<key>com.apple.private.MobileContainerManager.allowed</key>
+	<true/>
+	<key>com.apple.private.coreservices.canresetserverstore</key>
+	<true/>
+	<key>com.apple.keystore.access-keychain-keys</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+echo "[XAG] Removing ios-ag..."
+PLIST="/Library/LaunchDaemons/com.zmmo.iosag.plist"
+[ -f "$PLIST" ] && launchctl unload "$PLIST" 2>/dev/null || \
+    launchctl bootout system "$PLIST" 2>/dev/null || true
+
+rm -f /var/mobile/Library/Preferences/com.zmmo.iosag.plist
+rm -f /var/mobile/Library/Preferences/com.zmmo.gps.plist
+rm -f /var/mobile/Library/CoreServices/MobileGestalt_Fake.plist
+
+echo "[XAG] ios-ag removed"
+exit 0
