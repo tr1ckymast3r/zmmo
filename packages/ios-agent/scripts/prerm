@@ -1,0 +1,24 @@
+#!/bin/sh
+# ZMMO ios-agent — pre removal script
+set -e
+
+echo "[ZMMO] Removing ios-agent..."
+
+# Unload the daemon
+LAUNCHD_PLIST="/Library/LaunchDaemons/com.zmmo.iosagent.plist"
+
+if [ -f "$LAUNCHD_PLIST" ]; then
+    launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || \
+    launchctl bootout system "$LAUNCHD_PLIST" 2>/dev/null
+fi
+
+# Clean up
+rm -f /var/mobile/Library/Preferences/com.zmmo.deviceinfo.plist
+rm -f /var/mobile/Library/Preferences/com.zmmo.gpsfake.plist
+rm -f /var/mobile/Library/CoreServices/MobileGestalt_Fake.plist
+rm -f /var/mobile/Library/CoreSuggestionsInternals_Fake.plist
+rm -f /var/mobile/Library/InfoMobileSafari_Fake.plist
+rm -f /var/mobile/Library/Preferences/.GlobalPreferences_m.plist
+
+echo "[ZMMO] ios-agent removed."
+exit 0

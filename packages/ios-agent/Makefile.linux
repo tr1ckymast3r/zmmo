@@ -1,0 +1,39 @@
+# ZMMO ios-agent — Linux cross-compile Makefile
+# Uses: clang (arm64-apple-ios target) + ld64.lld (Mach-O linker)
+# SDK: iPhoneOS12.1.sdk from DavidSkrundz/sdks
+
+SDK        = /opt/theos/sdks/iPhoneOS12.1.sdk
+TARGET     = arm64-apple-ios12.1
+CC         = clang
+CXX        = clang++
+LD         = ld64.lld
+CFLAGS     = -target $(TARGET) -isysroot $(SDK) -Wall -O2 -fobjc-arc
+LDFLAGS    = -arch arm64 -platform_version ios 12.1 0 -syslibroot $(SDK)
+LDLIBS     = -lSystem -lobjc -lz
+FRAMEWORKS = -framework Foundation -framework CoreFoundation -framework IOKit -framework Security
+MG_FRAMEWORK = $(SDK)/System/Library/PrivateFrameworks/MobileGestalt.framework
+
+AGENT_SRC  = agent/main.mm agent/ZMMOHTTPServer.mm agent/ZMMOCollector.mm agent/ZMMOSpoofer.mm agent/ZMMOBackup.mm
+AGENT_OBJ  = $(AGENT_SRC:.mm=.o)
+
+# Agent binary
+zmmo-agent: $(AGENT_OBJ)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) $(FRAMEWORKS) \
+	  -F$(MG_FRAMEWORK) -framework MobileGestalt
+
+# Compile .mm → .o
+%.o: %.mm
+	$(CXX) $(CFLAGS) -c -o $@ $< -F$(MG_FRAMEWORK)
+
+# Tweak dylib
+tweak/ZMMODeviceProof.dylib: tweak/Tweak.x
+	# Logos preprocessing would normally be done by Theos
+	# For now, compile directly (requires manual conversion)
+	@echo "Tweak requires Theos Logos preprocessor — use 'make package' on macOS"
+
+.PHONY: clean all
+
+all: zmmo-agent
+
+clean:
+	rm -f zmmo-agent $(AGENT_OBJ)

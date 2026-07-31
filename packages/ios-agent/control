@@ -1,0 +1,12 @@
+Package: com.zmmo.iosagent
+Name: ZMMO iOS Agent
+Version: 0.1.0
+Architecture: iphoneos-arm64e
+Description: ZMMO Device Changer — iOS agent daemon.
+ Replaces KidsAutov4. Collects device info, spoofs properties,
+ manages app backups via REST API on port 15555.
+Maintainer: ZMMO <zmmo@example.com>
+Author: ZMMO
+Section: Utilities
+Depends: firmware (>= 12.0), mobilesubstrate
+Tag: role::hacker, purpose::extension

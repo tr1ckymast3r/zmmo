@@ -935,7 +935,22 @@ func handlePackages(w http.ResponseWriter, r *http.Request) {
 	}
 	deviceID := parts[0]
 
-	out, err := adbShell(deviceID, "pm list packages -3 -f")
+	// Resolve UUID or serial → ADB serial
+	deviceMu.RLock()
+	serial := ""
+	for _, dev := range devices {
+		if dev.ID == deviceID || dev.Serial == deviceID {
+			serial = dev.Serial
+			break
+		}
+	}
+	deviceMu.RUnlock()
+	if serial == "" {
+		writeError(w, 404, "device not found")
+		return
+	}
+
+	out, err := adbShell(serial, "pm list packages -f")
 	if err != nil {
 		writeError(w, 500, "failed to list packages: "+err.Error())
 		return
@@ -944,7 +959,7 @@ func handlePackages(w http.ResponseWriter, r *http.Request) {
 		Package string `json:"package"`
 		Name    string `json:"name"`
 	}
-	var pkgs []PkgInfo
+	pkgs := make([]PkgInfo, 0)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)

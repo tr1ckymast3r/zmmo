@@ -1,0 +1,29 @@
+#!/bin/sh
+# ZMMO ios-agent — post installation script
+set -e
+
+echo "[ZMMO] Installing ios-agent v0.1.0..."
+
+# Create necessary directories
+mkdir -p /var/mobile/Library/Preferences
+mkdir -p /var/mobile/ZMMOBackups
+
+# Load the LaunchDaemon
+LAUNCHD_PLIST="/Library/LaunchDaemons/com.zmmo.iosagent.plist"
+
+if [ -f "$LAUNCHD_PLIST" ]; then
+    echo "[ZMMO] Loading LaunchDaemon..."
+    launchctl load -w "$LAUNCHD_PLIST" 2>/dev/null || \
+    launchctl bootstrap system "$LAUNCHD_PLIST" 2>/dev/null || \
+    echo "[ZMMO] Warning: Could not load daemon — loader restart may be needed"
+else
+    echo "[ZMMO] ERROR: LaunchDaemon plist not found!"
+    exit 1
+fi
+
+# Kill SpringBoard to load the tweak
+killall -9 SpringBoard backboardd 2>/dev/null || true
+
+echo "[ZMMO] ios-agent installed successfully."
+echo "[ZMMO] API: http://localhost:15555"
+exit 0

@@ -1,0 +1,20 @@
+// ZMMODeviceProof.plist — MobileSubstrate filter
+// Hook into the same processes as KidsAutov4's DeviceProof.dylib
+{
+    Filter = {
+        Bundles = (
+            "com.apple.UIKit",
+            "com.apple.accountsd",
+            "com.apple.appstored",
+            "com.apple.itunesstored",
+            "com.apple.WebKit.WebContent",
+            "com.apple.WebKit.Networking",
+            "com.apple.MobileGestaltHelper",
+            "com.apple.springboard",
+            "com.apple.Preferences",
+            "com.apple.locationd",
+            "com.apple.assistantd",
+            "com.apple.mediaserverd"
+        );
+    };
+}

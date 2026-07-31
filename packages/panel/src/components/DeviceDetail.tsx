@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import type { DeviceInfo, DeviceMeta, PropValue } from "@/types/device";
-import { updateDeviceProps, applyDeviceProps, createBackup, getDeviceMeta, refreshDeviceMeta } from "@/lib/api";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import type { DeviceInfo, DeviceMeta, PropValue, BackupInfo } from "@/types/device";
+import {
+  updateDeviceProps,
+  applyDeviceProps,
+  createBackup,
+  getDeviceMeta,
+  refreshDeviceMeta,
+  getPackages,
+  getBackups,
+  restoreBackup,
+  type PackageInfo,
+} from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +20,12 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 interface DeviceDetailProps {
@@ -132,6 +148,262 @@ function InfoSummary({ meta }: { meta: DeviceMeta }) {
   );
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Backup Modal
+   ───────────────────────────────────────────────────────────── */
+function BackupModal({
+  open,
+  onClose,
+  deviceId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  deviceId: string;
+}) {
+  const [packages, setPackages] = useState<PackageInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [backing, setBacking] = useState(false);
+
+  // Load packages when modal opens
+  useEffect(() => {
+    if (!open || !deviceId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const pkgs = await getPackages(deviceId);
+        if (!cancelled) setPackages(pkgs);
+      } catch (e: any) {
+        toast.error(`Failed to load packages: ${e.message}`);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, deviceId]);
+
+  const filtered = useMemo(() => {
+    if (!search) return packages;
+    const q = search.toLowerCase();
+    return packages.filter((p) => p.package.toLowerCase().includes(q));
+  }, [packages, search]);
+
+  const toggle = (pkg: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(pkg)) next.delete(pkg);
+      else next.add(pkg);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selected.size === filtered.length) setSelected(new Set());
+    else setSelected(new Set(filtered.map((p) => p.package)));
+  };
+
+  const handleBackup = async () => {
+    if (selected.size === 0) return;
+    setBacking(true);
+    try {
+      const result = await createBackup(deviceId, null as any, Array.from(selected));
+      toast.success(`Backup created: ${result.backup.filename}`);
+      setSelected(new Set());
+      onClose();
+    } catch (e: any) {
+      toast.error(`Backup failed: ${e.message}`);
+    } finally {
+      setBacking(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg bg-zinc-900 border-zinc-800 text-zinc-100 max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-sm">📦 Backup App Data</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search packages..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-[11px] flex-1 bg-zinc-800 border-zinc-700"
+          />
+          <button onClick={selectAll} className="text-[10px] text-blue-400 hover:underline whitespace-nowrap">
+            {selected.size === filtered.length ? "Deselect all" : "Select all"}
+          </button>
+        </div>
+
+        <div className="text-[10px] text-zinc-500">
+          {loading ? "Loading..." : `${selected.size} / ${packages.length} selected`}
+        </div>
+
+        <ScrollArea className="flex-1 border border-zinc-800 rounded-lg">
+          {loading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-5 h-5 border-2 border-zinc-500 border-t-blue-500 rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="p-1">
+              {filtered.map((pkg) => (
+                <label
+                  key={pkg.package}
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800/50 rounded cursor-pointer"
+                >
+                  <Switch
+                    checked={selected.has(pkg.package)}
+                    onCheckedChange={() => toggle(pkg.package)}
+                    className="scale-75"
+                  />
+                  <span className="text-[11px] text-zinc-300 font-mono truncate">{pkg.package}</span>
+                </label>
+              ))}
+              {filtered.length === 0 && !loading && (
+                <p className="text-[11px] text-zinc-500 text-center py-8">
+                  {packages.length === 0 ? "No packages found" : "No matches"}
+                </p>
+              )}
+            </div>
+          )}
+        </ScrollArea>
+
+        <div className="flex gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} className="h-7 text-[11px] border-zinc-700 text-zinc-300 flex-1">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleBackup}
+            disabled={selected.size === 0 || backing}
+            className="h-7 text-[11px] bg-blue-600 hover:bg-blue-500 flex-1"
+          >
+            {backing ? "Backing up..." : `Backup (${selected.size})`}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Restore Modal
+   ───────────────────────────────────────────────────────────── */
+function RestoreModal({
+  open,
+  onClose,
+  deviceId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  deviceId: string;
+}) {
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const list = await getBackups();
+        if (!cancelled) setBackups(list);
+      } catch (e: any) {
+        toast.error(`Failed to load backups: ${e.message}`);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  const handleRestore = async (backup: BackupInfo) => {
+    setRestoring(backup.id);
+    try {
+      await restoreBackup(backup.id, deviceId);
+      toast.success(`Restored ${backup.packages?.length ?? 0} packages`);
+      onClose();
+    } catch (e: any) {
+      toast.error(`Restore failed: ${e.message}`);
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  const sizeFmt = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg bg-zinc-900 border-zinc-800 text-zinc-100 max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-sm">📥 Restore Backup</DialogTitle>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="w-5 h-5 border-2 border-zinc-500 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        ) : backups.length === 0 ? (
+          <div className="text-center py-8 space-y-2">
+            <p className="text-zinc-500 text-sm">No backups saved</p>
+            <p className="text-zinc-600 text-xs">Use the Backup tab to create one first</p>
+          </div>
+        ) : (
+          <ScrollArea className="flex-1">
+            <div className="space-y-2">
+              {backups.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex items-center gap-3 p-2.5 rounded-lg bg-zinc-800/50 border border-zinc-700/50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-zinc-200 font-mono truncate">{b.filename}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-zinc-500">{sizeFmt(b.size)}</span>
+                      {b.packages && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-zinc-700 text-zinc-400">
+                          {b.packages.length} pkgs
+                        </Badge>
+                      )}
+                      {b.deviceSerial && (
+                        <span className="text-[10px] text-zinc-600 font-mono">{b.deviceSerial}</span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => handleRestore(b)}
+                    disabled={restoring === b.id}
+                    className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-500"
+                  >
+                    {restoring === b.id ? "Restoring..." : "Restore"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+
+        <div className="pt-2">
+          <Button variant="outline" onClick={onClose} className="h-7 text-[11px] border-zinc-700 text-zinc-300 w-full">
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Main DeviceDetail
+   ───────────────────────────────────────────────────────────── */
 export function DeviceDetail({ device, onUpdate }: DeviceDetailProps) {
   const [meta, setMeta] = useState<DeviceMeta | null>(null);
   const [metaLoading, setMetaLoading] = useState(false);
@@ -140,9 +412,12 @@ export function DeviceDetail({ device, onUpdate }: DeviceDetailProps) {
   const [editFields, setEditFields] = useState<EditField[]>([]);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
-  // Load meta on mount
+  // Load meta on mount (skip if offline)
   useEffect(() => {
+    if (device.status === "offline") return;
     let cancelled = false;
     async function load() {
       setMetaLoading(true);
@@ -211,11 +486,6 @@ export function DeviceDetail({ device, onUpdate }: DeviceDetailProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const props: Record<string, PropValue> = {};
-      for (const f of editFields) {
-        props[f.key] = { value: f.newValue, enabled: f.enabled };
-      }
-      // Convert to the format the backend expects and save
       const deviceProps = {} as Record<string, PropValue>;
       for (const f of editFields) {
         deviceProps[f.key] = { value: f.newValue, enabled: f.enabled };
@@ -243,22 +513,14 @@ export function DeviceDetail({ device, onUpdate }: DeviceDetailProps) {
     }
   };
 
-  // Backup
-  const handleBackup = async () => {
-    try {
-      const backup = await createBackup(device.id, {} as any);
-      toast.success(`Backup created: ${backup.filename}`);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Backup failed");
-    }
-  };
-
   const statusColor: Record<string, string> = {
     online: "bg-emerald-400",
     offline: "bg-zinc-500",
     busy: "bg-amber-400 animate-pulse",
     error: "bg-red-400",
   };
+
+  const isOffline = device.status === "offline";
 
   return (
     <div className="space-y-3">
@@ -282,148 +544,189 @@ export function DeviceDetail({ device, onUpdate }: DeviceDetailProps) {
               </Badge>
             )}
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleRefreshMeta}
-            disabled={refreshingMeta}
-            className="h-7 text-[11px] border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-          >
-            {refreshingMeta ? "⏳ Collecting..." : `🔄 ${meta ? "Refresh Meta" : "Get Device Info"}`}
-          </Button>
-        </div>
-      </Card>
-
-      {/* ── Meta Loading / Error / Summary ── */}
-      {metaLoading && (
-        <Card className="p-6 bg-zinc-900 border-zinc-800 text-center">
-          <p className="text-sm text-zinc-400">⏳ Loading device metadata...</p>
-        </Card>
-      )}
-
-      {!metaLoading && metaError && !meta && (
-        <Card className="p-4 bg-zinc-900 border-zinc-800 text-center space-y-3">
-          <p className="text-sm text-amber-400">⚠️ No device metadata yet</p>
-          <p className="text-[11px] text-zinc-500">Click &quot;Get Device Info&quot; to collect all device properties via ADB</p>
-          <Button
-            size="sm"
-            onClick={handleRefreshMeta}
-            disabled={refreshingMeta}
-            className="h-7 text-[11px] bg-blue-600 hover:bg-blue-500"
-          >
-            {refreshingMeta ? "⏳ Collecting..." : "🔄 Collect Device Info Now"}
-          </Button>
-        </Card>
-      )}
-
-      {/* ── Info Summary ── */}
-      {meta && <InfoSummary meta={meta} />}
-
-      {/* ── Edit Form ── */}
-      {meta && (
-        <>
-          <Tabs defaultValue="sim" className="w-full">
-            <TabsList className="w-full bg-zinc-900 border border-zinc-800 p-1 h-auto justify-start overflow-x-auto sticky top-0 z-10">
-              {CATEGORIES.map((cat) => {
-                const stats = catStats(cat.id);
-                return (
-                  <TabsTrigger
-                    key={cat.id}
-                    value={cat.id}
-                    className="text-[10px] px-2.5 py-1 data-[state=active]:bg-zinc-800 flex items-center gap-1"
-                  >
-                    <span>{cat.icon}</span>
-                    <span className="hidden sm:inline">{cat.label}</span>
-                    <Badge variant="outline" className={`text-[8px] px-1 py-0 border-zinc-700 ${stats.enabled > 0 ? "text-emerald-400 border-emerald-800" : "text-zinc-500"}`}>
-                      {stats.enabled}/{stats.total}
-                    </Badge>
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-
-            {CATEGORIES.map((cat) => {
-              const fields = editFields.filter((f) => f.category === cat.id);
-              return (
-                <TabsContent key={cat.id} value={cat.id} className="mt-2">
-                  <Card className="bg-zinc-900 border-zinc-800">
-                    <ScrollArea className="h-[50vh] sm:h-[55vh]">
-                      <div className="divide-y divide-zinc-800/50">
-                        {fields.map((field) => (
-                          <div key={field.key} className="flex items-center gap-2 px-3 py-2">
-                            {/* Label */}
-                            <label className="w-[120px] sm:w-[140px] flex-shrink-0 text-[11px] font-medium text-zinc-400 truncate">
-                              {field.label}
-                            </label>
-
-                            {/* Input — shows current value, editable when enabled */}
-                            <Input
-                              value={field.enabled ? field.newValue : field.currentValue}
-                              onChange={(e) => handleValue(field.key, e.target.value)}
-                              disabled={!field.enabled}
-                              placeholder={field.enabled ? `Enter new ${field.label}...` : ""}
-                              className={`flex-1 min-w-0 h-7 text-[11px] font-mono ${
-                                field.enabled
-                                  ? "bg-zinc-800 border-zinc-600 text-zinc-200"
-                                  : "bg-zinc-900/50 border-zinc-800 text-zinc-500"
-                              }`}
-                            />
-
-                            {/* Checkbox to enable editing */}
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <Switch
-                                checked={field.enabled}
-                                onCheckedChange={(v) => handleToggle(field.key, v)}
-                                className="scale-75"
-                              />
-                              <span className="text-[8px] text-zinc-600 w-5 text-center">
-                                {field.enabled ? "ON" : ""}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </Card>
-                </TabsContent>
-              );
-            })}
-          </Tabs>
-
-          {/* ── Action Bar ── */}
-          <Card className="p-3 bg-zinc-900 border-zinc-800">
-            <div className="flex items-center gap-2 flex-wrap">
+          {!isOffline && (
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
               <Button
                 size="sm"
-                onClick={handleSave}
-                disabled={saving}
-                className="h-7 text-[11px] bg-blue-600 hover:bg-blue-500"
+                variant="outline"
+                onClick={() => window.open("http://" + window.location.hostname + ":6081/vnc.html", "_blank")}
+                className="h-7 text-[10px] sm:text-[11px] border-zinc-700 text-zinc-300 hover:bg-zinc-800"
               >
-                {saving ? "Saving..." : "💾 Save Config"}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleApply}
-                disabled={applying || totalEnabled === 0}
-                className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500"
-              >
-                {applying ? "Applying..." : `⚡ Apply Now (${totalEnabled})`}
+                🖥️ VNC
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleBackup}
-                className="h-7 text-[11px] border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                onClick={handleRefreshMeta}
+                disabled={refreshingMeta}
+                className="h-7 text-[10px] sm:text-[11px] border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              >
+                {refreshingMeta ? "⏳" : "🔄"} <span className="hidden sm:inline">{refreshingMeta ? "Collecting..." : meta ? "Refresh Meta" : "Get Info"}</span>
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+
+
+      {/* ── Offline message ── */}
+      {isOffline && (
+        <Card className="p-6 bg-zinc-900 border-zinc-800 text-center">
+          <p className="text-sm text-zinc-500">🔌 Device is offline</p>
+          <p className="text-[11px] text-zinc-600 mt-1">Connect the device via ADB to manage properties</p>
+        </Card>
+      )}
+
+      {!isOffline && (
+        <>
+          {/* ── Meta Loading / Error / Summary ── */}
+          {metaLoading && (
+            <Card className="p-6 bg-zinc-900 border-zinc-800 text-center">
+              <p className="text-sm text-zinc-400">⏳ Loading device metadata...</p>
+            </Card>
+          )}
+
+          {!metaLoading && metaError && !meta && (
+            <Card className="p-4 bg-zinc-900 border-zinc-800 text-center space-y-3">
+              <p className="text-sm text-amber-400">⚠️ No device metadata yet</p>
+              <p className="text-[11px] text-zinc-500">Click &quot;Get Device Info&quot; to collect all device properties via ADB</p>
+              <Button
+                size="sm"
+                onClick={handleRefreshMeta}
+                disabled={refreshingMeta}
+                className="h-7 text-[11px] bg-blue-600 hover:bg-blue-500"
+              >
+                {refreshingMeta ? "⏳ Collecting..." : "🔄 Collect Device Info Now"}
+              </Button>
+            </Card>
+          )}
+
+          {/* ── Info Summary ── */}
+          {meta && <InfoSummary meta={meta} />}
+
+          {/* ── Edit Form ── */}
+          {meta && (
+            <>
+              <Tabs defaultValue="sim" className="w-full">
+                <TabsList className="w-full bg-zinc-900 border border-zinc-800 p-1 h-auto justify-start overflow-x-auto sticky top-0 z-10">
+                  {CATEGORIES.map((cat) => {
+                    const stats = catStats(cat.id);
+                    return (
+                      <TabsTrigger
+                        key={cat.id}
+                        value={cat.id}
+                        className="text-[10px] px-2.5 py-1 data-[state=active]:bg-zinc-800 flex items-center gap-1"
+                      >
+                        <span>{cat.icon}</span>
+                        <span className="hidden sm:inline">{cat.label}</span>
+                        <Badge variant="outline" className={`text-[8px] px-1 py-0 border-zinc-700 ${stats.enabled > 0 ? "text-emerald-400 border-emerald-800" : "text-zinc-500"}`}>
+                          {stats.enabled}/{stats.total}
+                        </Badge>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+
+                {CATEGORIES.map((cat) => {
+                  const fields = editFields.filter((f) => f.category === cat.id);
+                  return (
+                    <TabsContent key={cat.id} value={cat.id} className="mt-2">
+                      <Card className="bg-zinc-900 border-zinc-800">
+                        <ScrollArea className="h-[50vh] sm:h-[55vh]">
+                          <div className="divide-y divide-zinc-800/50">
+                            {fields.map((field) => (
+                              <div key={field.key} className="flex items-center gap-2 px-3 py-2">
+                                {/* Label */}
+                                <label className="w-[90px] sm:w-[130px] flex-shrink-0 text-[10px] sm:text-[11px] font-medium text-zinc-400 truncate">
+                                  {field.label}
+                                </label>
+
+                                {/* Input — shows current value, editable when enabled */}
+                                <Input
+                                  value={field.enabled ? field.newValue : field.currentValue}
+                                  onChange={(e) => handleValue(field.key, e.target.value)}
+                                  disabled={!field.enabled}
+                                  placeholder={field.enabled ? `Enter new ${field.label}...` : ""}
+                                  className={`flex-1 min-w-0 h-7 text-[11px] font-mono ${field.enabled
+                                      ? "bg-zinc-800 border-zinc-600 text-zinc-200"
+                                      : "bg-zinc-900/50 border-zinc-800 text-zinc-500"
+                                    }`}
+                                />
+
+                                {/* Checkbox to enable editing */}
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <Switch
+                                    checked={field.enabled}
+                                    onCheckedChange={(v) => handleToggle(field.key, v)}
+                                    className="scale-75"
+                                  />
+                                  <span className="text-[8px] text-zinc-600 w-5 text-center">
+                                    {field.enabled ? "ON" : ""}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </Card>
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
+
+              {/* ── Action Bar ── */}
+              <Card className="p-2 sm:p-3 bg-zinc-900 border-zinc-800">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="h-7 text-[11px] bg-blue-600 hover:bg-blue-500 flex-1 sm:flex-none"
+                  >
+                    {saving ? "Saving..." : "💾 Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleApply}
+                    disabled={applying || totalEnabled === 0}
+                    className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-500 flex-1 sm:flex-none"
+                  >
+                    {applying ? "Applying..." : `⚡ Apply (${totalEnabled})`}
+                  </Button>
+                  <span className="text-[9px] sm:text-[10px] text-zinc-600 w-full sm:w-auto sm:ml-auto text-center sm:text-right">
+                    {totalEnabled > 0
+                      ? `${totalEnabled} field${totalEnabled !== 1 ? "s" : ""} to change`
+                      : "Check ☑ to enable editing"}
+                  </span>
+                </div>
+              </Card>
+            </>
+          )}
+          {/* ── Backup / Restore Quick Actions ── */}
+          <Card className="p-2 sm:p-3 bg-zinc-900 border-zinc-800">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Data</span>
+              <Button
+                size="sm"
+                onClick={() => setBackupOpen(true)}
+                className="h-7 text-[11px] bg-blue-600 hover:bg-blue-500 flex-1 sm:flex-none"
               >
                 📦 Backup
               </Button>
-              <span className="text-[10px] text-zinc-600 ml-auto">
-                {totalEnabled > 0
-                  ? `${totalEnabled} field${totalEnabled !== 1 ? "s" : ""} to change`
-                  : "Check ☑ to enable editing"}
-              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setRestoreOpen(true)}
+                className="h-7 text-[11px] border-zinc-700 text-zinc-300 hover:bg-zinc-800 flex-1 sm:flex-none"
+              >
+                📥 Restore
+              </Button>
             </div>
           </Card>
+          {/* ── Modals ── */}
+          <BackupModal open={backupOpen} onClose={() => setBackupOpen(false)} deviceId={device.id} />
+          <RestoreModal open={restoreOpen} onClose={() => setRestoreOpen(false)} deviceId={device.id} />
         </>
       )}
     </div>
