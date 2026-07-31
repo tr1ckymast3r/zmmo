@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+echo "[ZMMO-AUTO] Removing ios-auto..."
+PLIST="/Library/LaunchDaemons/com.zmmo.iosauto.plist"
+[ -f "$PLIST" ] && launchctl unload "$PLIST" 2>/dev/null || launchctl bootout system "$PLIST" 2>/dev/null || true
+exit 0

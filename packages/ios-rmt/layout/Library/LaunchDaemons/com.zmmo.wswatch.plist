@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.zmmo.wswatch</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>-c</string>
+		<string>sleep 11; F=/tmp/zmmo_wswatch_fail; if (echo>/dev/tcp/127.0.0.1/8000)2>/dev/null &amp;&amp; (echo>/dev/tcp/127.0.0.1/8888)2>/dev/null; then rm -f $F; sleep 500; else n=$(cat $F 2>/dev/null || echo 0); n=$((n+1)); echo $n>$F; [ $n -ge 3 ] &amp;&amp; rm -f $F &amp;&amp; launchctl reboot userspace; fi; exit 0</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartInterval</key>
+	<integer>30</integer>
+	<key>StandardErrorPath</key>
+	<string>/tmp/zmmo_wswatch.log</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/zmmo_wswatch.log</string>
+</dict>
+</plist>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZMMO iOS Auto — Web IDE</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:monospace;background:#1e1e1e;color:#d4d4d4;display:flex;height:100vh}
+.sidebar{width:240px;background:#252526;padding:10px;border-right:1px solid #3e3e3e}
+.sidebar button{display:block;width:100%;padding:8px;margin:4px 0;background:#3e3e3e;color:#ccc;border:none;cursor:pointer;border-radius:4px}
+.sidebar button:hover{background:#505050}
+.main{flex:1;display:flex;flex-direction:column}
+.toolbar{padding:8px;background:#333;display:flex;gap:8px}
+.toolbar button{padding:6px 16px;background:#0e639c;color:#fff;border:none;border-radius:4px;cursor:pointer}
+.toolbar button.stop{background:#c50f1f}
+.editor{flex:1;display:flex}
+#code{flex:1;background:#1e1e1e;color:#d4d4d4;border:none;padding:12px;font-family:monospace;font-size:14px;resize:none;outline:none}
+#output{flex:0 0 200px;background:#111;color:#6a9955;padding:12px;overflow-y:auto;font-size:12px;border-top:1px solid #3e3e3e}
+.status{background:#007acc;color:#fff;padding:4px 12px;font-size:12px}
+.status.error{background:#c50f1f}
+</style></head>
+<body>
+<div class="sidebar">
+  <h3 style="color:#569cd6;margin-bottom:8px">🚀 ZMMO Auto</h3>
+  <button onclick="runScript()">▶ Run</button>
+  <button onclick="stopScript()" style="background:#5a1a1a;color:#f88">⏹ Stop</button>
+  <hr style="border-color:#3e3e3e;margin:8px 0">
+  <button onclick="farmOpen()">📱 Open Acc</button>
+  <button onclick="farmBackup()">💾 Backup Acc</button>
+  <button onclick="farmRestore()">📥 Restore Acc</button>
+  <button onclick="farmReset()">🗑 Reset App</button>
+  <hr style="border-color:#3e3e3e;margin:8px 0">
+  <button onclick="captureScreen()">📸 Screenshot</button>
+  <button onclick="showHelp()">❓ API Help</button>
+</div>
+<div class="main">
+  <div class="toolbar">
+    <input id="deviceHost" value="localhost:15558" style="flex:1;padding:6px;background:#3e3e3e;color:#ccc;border:none;border-radius:4px;max-width:200px">
+    <button onclick="wsConnect()">🔌 Connect</button>
+  </div>
+  <div class="editor">
+    <textarea id="code" placeholder="-- Lua/JS script for ZMMO iOS Auto
+-- Available: tap(x,y), swipe(x1,y1,x2,y2), inputText('text'),
+--   home(), sleepMs(ms), httpGet(url), httpPost(url,body),
+--   getClipboard(), setClipboard(text), log(msg), stop()
+
+log('Hello from ZMMO Auto!')
+tap(200, 400)
+sleepMs(1000)
+swipe(200, 600, 200, 200)
+  "></textarea>
+  </div>
+  <div id="output"></div>
+  <div id="status" class="status">Disconnected</div>
+</div>
+<script>
+let ws = null;
+const host = ()=>document.getElementById('deviceHost').value;
+const statusEl = (m,c)=> {
+  const s=document.getElementById('status');
+  s.textContent=m; s.className='status'+(c?' '+c:'');
+};
+
+function wsSend(msg) {
+  if(!ws) return log('Not connected');
+  ws.send(JSON.stringify(msg));
+}
+
+async function apiGet(path) {
+  const r=await fetch('http://'+host()+'/api/v1/'+path);
+  return r.json();
+}
+
+async function apiPost(path,body) {
+  const r=await fetch('http://'+host()+'/api/v1/'+path,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+  });
+  return r.json();
+}
+
+function log(msg) {
+  const o=document.getElementById('output');
+  o.textContent += msg + '\n';
+  o.scrollTop = o.scrollHeight;
+}
+
+function wsConnect() {
+  const url='ws://'+host();
+  ws = new WebSocket(url);
+  ws.onopen = ()=>statusEl('Connected ✓');
+  ws.onmessage = (e)=>{
+    const r=JSON.parse(e.data);
+    log(JSON.stringify(r,null,2));
+  };
+  ws.onclose = ()=>statusEl('Disconnected','error');
+  ws.onerror = ()=>statusEl('Connection error','error');
+}
+
+function runScript() {
+  const code=document.getElementById('code').value;
+  if(ws) wsSend({type:'lua.exec',id:''+Date.now(),params:{script:code,args:[]}});
+  else apiPost('lua/exec',{script:code,args:[]}).then(r=>log(JSON.stringify(r)));
+}
+
+function stopScript() {
+  if(ws) wsSend({type:'lua.stop',id:''+Date.now(),params:{}});
+  else apiPost('lua/stop',{}).then(r=>log(JSON.stringify(r)));
+}
+
+async function farmOpen() {
+  const b=prompt('Bundle ID:','com.tencent.xin');
+  const a=prompt('Account name:','acc1');
+  const r=await apiPost('farm/openAcc',{bundleID:b,accName:a});
+  log(JSON.stringify(r));
+}
+
+async function farmBackup() {
+  const b=prompt('Bundle ID:','com.tencent.xin');
+  const a=prompt('Account name:','acc1');
+  const r=await apiPost('farm/backupAcc',{bundleID:b,accName:a});
+  log(JSON.stringify(r));
+}
+
+async function farmRestore() {
+  const b=prompt('Bundle ID:','com.tencent.xin');
+  const a=prompt('Account name:','acc1');
+  const r=await apiPost('farm/restoreAcc',{bundleID:b,accName:a});
+  log(JSON.stringify(r));
+}
+
+async function farmReset() {
+  const b=prompt('Bundle ID:','com.tencent.xin');
+  if(!confirm('This will wipe ALL data for '+b+'!')) return;
+  const r=await apiPost('farm/resetApp',{bundleID:b});
+  log(JSON.stringify(r));
+}
+
+async function captureScreen() {
+  const r=await apiPost('ocr/captureScreen',{});
+  log(JSON.stringify(r));
+}
+
+function showHelp() {
+  log(`=== ZMMO Auto API ===
+SCRIPTS: tap(x,y), swipe(x1,y1,x2,y2), inputText(text)
+  home(), sleepMs(ms), httpGet/Post(url,body)
+  getClipboard(), setClipboard(text), log(msg), stop()
+FARMING: openAcc, backupAcc, restoreAcc, deleteAcc
+  resetApp(bundleID), cleanAllAcc(bundleID)
+DEVICE:  fakeLocation(lat,lon), setProxy(ip:port)
+  gesture(type,x,y), reboot()
+OCR:     findText(x,y,w,h), captureScreen(), findImage()
+MCP:     Connect to /sse for AI agent control`);
+}
+</script>
+</body>
+</html>

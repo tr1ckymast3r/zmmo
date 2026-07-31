@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+echo "[ZMMO-RMT] Removing ios-rmt..."
+for p in com.zmmo.iosrmt com.zmmo.wswatch; do
+    [ -f "/Library/LaunchDaemons/$p.plist" ] && launchctl unload "/Library/LaunchDaemons/$p.plist" 2>/dev/null || \
+        launchctl bootout system "/Library/LaunchDaemons/$p.plist" 2>/dev/null || true
+done
+exit 0

@@ -1,0 +1,14 @@
+Package: com.zmmo.iosrmt
+Name: ZMMO iOS Remote
+Version: 0.1.0
+Architecture: iphoneos-arm64e
+Description: VNC-style remote desktop for iPhone.
+ GPU-level screen mirroring via CARenderServer.
+ Touch control: swipe, tap, home, power, volume.
+ Audio streaming: device microphone → browser.
+ Floating button on-device controls.
+ Web control panel accessible from any browser.
+Depends: firmware (>= 12.0), mobilesubstrate, com.rpetrich.rocketbootstrap
+Maintainer: ZMMO
+Author: ZMMO
+Section: Utilities

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+echo "[ZMMO-AUTO] Installing ios-auto..."
+mkdir -p /var/mobile/Library/ZMMO/ios-auto/{modules,farms,webide}
+chmod -R 755 /var/mobile/Library/ZMMO/ios-auto
+
+PLIST="/Library/LaunchDaemons/com.zmmo.iosauto.plist"
+[ -f "$PLIST" ] && launchctl load -w "$PLIST" 2>/dev/null || launchctl bootstrap system "$PLIST" 2>/dev/null || true
+
+killall -9 SpringBoard backboardd 2>/dev/null || true
+echo "[ZMMO-AUTO] Ready on port 15558"
+exit 0

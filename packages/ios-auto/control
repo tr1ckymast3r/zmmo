@@ -1,0 +1,14 @@
+Package: com.zmmo.iosauto
+Name: ZMMO iOS Auto
+Version: 0.1.0
+Architecture: iphoneos-arm64e
+Description: Lua scripting engine + app farming + MCP + Web IDE.
+ AutoTouch-compatible .ate/.lua scripts.
+ App account farming: openAcc/backupAcc/restoreAcc/deleteAcc/resetApp.
+ MCP (Model Context Protocol) server for AI agent control.
+ OCR via Apple Vision, image recognition, proxy, location spoof.
+ Web IDE accessible from any browser.
+Depends: firmware (>= 12.0), mobilesubstrate, com.rpetrich.rocketbootstrap
+Maintainer: ZMMO
+Author: ZMMO
+Section: Utilities

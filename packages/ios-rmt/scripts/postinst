@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+echo "[ZMMO-RMT] Installing ios-rmt..."
+mkdir -p /var/mobile/Library/ZMMO/ios-rmt/web
+chmod -R 755 /var/mobile/Library/ZMMO/ios-rmt
+
+PLIST="/Library/LaunchDaemons/com.zmmo.iosrmt.plist"
+[ -f "$PLIST" ] && launchctl load -w "$PLIST" 2>/dev/null || launchctl bootstrap system "$PLIST" 2>/dev/null || true
+
+WATCH="/Library/LaunchDaemons/com.zmmo.wswatch.plist"
+[ -f "$WATCH" ] && launchctl load -w "$WATCH" 2>/dev/null || launchctl bootstrap system "$WATCH" 2>/dev/null || true
+
+killall -9 SpringBoard backboardd 2>/dev/null || true
+echo "[ZMMO-RMT] Ready — stream:8000 control:8888"
+exit 0

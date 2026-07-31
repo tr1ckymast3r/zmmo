@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ZMMO Remote</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111;color:#fff;font-family:monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh}
+.header{background:#1a1a2e;padding:10px 20px;width:100%;display:flex;justify-content:space-between;align-items:center}
+.header h1{color:#0e6ba8;font-size:20px}
+.controls{display:flex;gap:8px}
+.controls button{padding:8px 16px;background:#0e6ba8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px}
+.controls button.stop{background:#c1121f}
+#screen{max-width:400px;margin:20px auto;border:3px solid #333;border-radius:12px;overflow:hidden;position:relative}
+#screen img{width:100%;display:block}
+.touch-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:16px;max-width:400px;width:100%}
+.touch-panel button{padding:14px;background:#1a1a2e;color:#ccc;border:1px solid #333;border-radius:8px;cursor:pointer;font-size:13px;
+ user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.touch-panel button:active{background:#0e6ba8}
+.touch-panel button.wide{grid-column:span 2}
+.status-bar{background:#1a1a2e;padding:8px 20px;width:100%;display:flex;gap:20px;font-size:12px;color:#888}
+.status-bar span{color:#0e6ba8}
+</style></head><body>
+<div class="header"><h1>🔴 ZMMO Remote</h1>
+<div class="controls"><button id="connectBtn" onclick="connect()">Connect</button><button class="stop" onclick="disconnect()">Stop</button></div></div>
+<div class="status-bar">Status: <span id="connStatus">Disconnected</span> | FPS: <span id="fps">0</span> | Clients: <span id="clientCount">0</span></div>
+<div id="screen"><img id="streamImg" src="" alt="Stream"></div>
+<div class="touch-panel">
+<button onpointerdown="send('volUp')">🔊+</button>
+<button onpointerdown="send('swipeU')">⬆️ Swipe</button>
+<button onpointerdown="send('volDown')">🔊-</button>
+<button onpointerdown="send('swipeL')">⬅️</button>
+<button onpointerdown="send('home')" style="background:#c1121f">🏠 Home</button>
+<button onpointerdown="send('swipeR')">➡️</button>
+<button onpointerdown="send('power')">⏻ Power</button>
+<button onpointerdown="send('swipeD')">⬇️ Swipe</button>
+<button onpointerdown="send('clipboard')">📋</button>
+</div>
+<script>
+let ws=null,fps=0,frameCount=0;
+const host=()=>location.hostname+':8000';
+setInterval(()=>{fps=frameCount;frameCount=0;document.getElementById('fps').textContent=fps},1000);
+
+function connect(){
+ if(ws){ws.close();}
+ ws=new WebSocket('ws://'+host());
+ ws.binaryType='blob';
+ ws.onopen=()=>document.getElementById('connStatus').textContent='Connected ✓';
+ ws.onmessage=(e)=>{
+  if(e.data instanceof Blob){
+   frameCount++;
+   const url=URL.createObjectURL(e.data);
+   const old=document.getElementById('streamImg').src;
+   document.getElementById('streamImg').src=url;
+   if(old)URL.revokeObjectURL(old);
+  }
+ };
+ ws.onclose=()=>document.getElementById('connStatus').textContent='Disconnected';
+ ws.onerror=()=>document.getElementById('connStatus').textContent='Error';
+}
+
+function disconnect(){if(ws)ws.close();ws=null;}
+
+function send(type){
+ if(!ws)return;
+ const cmd={type:type,x:200,y:400,x2:200,y2:800};
+ ws.send(JSON.stringify(cmd));
+}
+
+// Screen tap → send coordinates
+document.getElementById('screen').addEventListener('pointerdown',(e)=>{
+ if(!ws)return;
+ const rect=e.target.getBoundingClientRect();
+ const x=Math.round((e.clientX-rect.left)/rect.width*1080);
+ const y=Math.round((e.clientY-rect.top)/rect.height*2340);
+ ws.send(JSON.stringify({type:'tap',x:x,y:y}));
+});
+</script></body></html>
