@@ -1,6 +1,7 @@
 // daemon/DeviceControl.mm — Location spoof + proxy + touch/gesture
 
 #import "DeviceControl.h"
+#import "ZMMOTouch.h"
 #import <CoreLocation/CoreLocation.h>
 #import <CFNetwork/CFNetwork.h>
 
@@ -60,17 +61,17 @@
     int y2 = [params[@"y2"] intValue];
 
     if ([type isEqualToString:@"tap"]) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText '%d %d tap' 2>/dev/null", x, y] UTF8String]);
+        [ZMMOTouch tap:x y:y];
     } else if ([type isEqualToString:@"swipe"]) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText '%d %d swipe %d %d' 2>/dev/null", x, y, x2, y2] UTF8String]);
+        [ZMMOTouch swipe:x y:y toX:x2 toY:y2 duration:300];
     } else if ([type isEqualToString:@"home"]) {
-        system("/usr/bin/killall -9 SpringBoard backboardd 2>/dev/null");
+        [ZMMOTouch home];
     } else if ([type isEqualToString:@"power"]) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText 'power' 2>/dev/null"] UTF8String]);
+        [ZMMOTouch power];
     } else if ([type isEqualToString:@"volUp"]) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText 'volUp' 2>/dev/null"] UTF8String]);
+        [ZMMOTouch volUp];
     } else if ([type isEqualToString:@"volDown"]) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText 'volDown' 2>/dev/null"] UTF8String]);
+        [ZMMOTouch volDown];
     }
 
     return @{@"type": type, @"x": @(x), @"y": @(y)};

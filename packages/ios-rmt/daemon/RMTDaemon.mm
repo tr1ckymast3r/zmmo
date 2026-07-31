@@ -186,8 +186,8 @@
     if ([path hasPrefix:@"/api/"]) {
         NSString *action = [path substringFromIndex:5];
         if ([action isEqualToString:@"screenshot"]) result = @{@"path": [_capture lastScreenshotPath]};
-        else if ([action isEqualToString:@"mic/start"]) result = [_audio start]];
-        else if ([action isEqualToString:@"mic/stop"]) result = [_audio stop]];
+        else if ([action isEqualToString:@"mic/start"]) result = [_audio start];
+        else if ([action isEqualToString:@"mic/stop"]) result = [_audio stop];
         else if ([action isEqualToString:@"status"]) result = @{@"streamClients": @(_streamClients.count), @"audioActive": @([_audio isActive])};
         else result = @{@"error": @"unknown"};
     } else {

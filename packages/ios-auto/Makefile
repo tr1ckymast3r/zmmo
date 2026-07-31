@@ -7,7 +7,7 @@ include $(THEOS)/makefiles/common.mk
 TOOL_NAME = zmmo-autod
 zmmo-autod_FILES = daemon/main.mm daemon/WSDaemon.mm daemon/LuaEngine.mm \
                    daemon/AppFarming.mm daemon/DeviceControl.mm \
-                   daemon/OCRHelper.mm daemon/MCPServer.mm
+                   daemon/OCRHelper.mm daemon/MCPServer.mm daemon/ZMMOTouch.mm
 zmmo-autod_FRAMEWORKS = Foundation CoreFoundation IOKit Security UIKit \
                          JavaScriptCore CoreLocation CoreTelephony CFNetwork
 zmmo-autod_PRIVATE_FRAMEWORKS = MobileGestalt AppSupport SpringBoardServices

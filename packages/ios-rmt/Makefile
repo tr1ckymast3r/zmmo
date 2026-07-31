@@ -6,7 +6,8 @@ include $(THEOS)/makefiles/common.mk
 # ── Daemon (screen/audio streaming) ──
 TOOL_NAME = zmmo-rmtd
 zmmo-rmtd_FILES = daemon/main.mm daemon/RMTDaemon.mm daemon/ScreenCapture.mm \
-                  daemon/AudioStream.mm daemon/TouchInject.mm daemon/WebSocket.mm
+                  daemon/AudioStream.mm daemon/TouchInject.mm daemon/WebSocket.mm \
+                  daemon/ZMMOTouch.mm
 zmmo-rmtd_FRAMEWORKS = Foundation CoreFoundation IOKit Security UIKit \
                         CoreGraphics CoreVideo AVFoundation Accelerate
 zmmo-rmtd_PRIVATE_FRAMEWORKS = AppSupport SpringBoardServices

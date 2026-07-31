@@ -1,8 +1,8 @@
-// daemon/TouchInject.mm — Touch event injection via IOKit HID / autotouch
+// daemon/TouchInject.mm — Touch event injection via IOKit HID
 // Receives JSON commands from WebSocket and translates to touch events
 
 #import "TouchInject.h"
-#import <IOKit/hid/IOHIDLib.h>
+#import "ZMMOTouch.h"
 
 @implementation TouchInject
 
@@ -20,38 +20,29 @@
     int y2 = [cmd[@"y2"] intValue];
 
     if ([type isEqualToString:@"tap"]) {
-        [self injectTap:x y:y];
+        [ZMMOTouch tap:x y:y];
     } else if ([type isEqualToString:@"swipe"]) {
-        [self injectSwipe:x y:y x2:x2 y2:y2];
+        [ZMMOTouch swipe:x y:y toX:x2 toY:y2 duration:300];
+    } else if ([type isEqualToString:@"swipeU"]) {
+        [ZMMOTouch swipe:x y:y toX:x toY:y - 600 duration:200];
+    } else if ([type isEqualToString:@"swipeD"]) {
+        [ZMMOTouch swipe:x y:y toX:x toY:y + 600 duration:200];
+    } else if ([type isEqualToString:@"swipeL"]) {
+        [ZMMOTouch swipe:x y:y toX:x - 400 toY:y duration:200];
+    } else if ([type isEqualToString:@"swipeR"]) {
+        [ZMMOTouch swipe:x y:y toX:x + 400 toY:y duration:200];
     } else if ([type isEqualToString:@"home"]) {
-        system("/usr/bin/killall -9 SpringBoard backboardd 2>/dev/null");
+        [ZMMOTouch home];
     } else if ([type isEqualToString:@"power"]) {
-        [self inject:cmd];
-    } else if ([type isEqualToString:@"volumeUp"]) {
-        [self inject:cmd];
-    } else if ([type isEqualToString:@"volumeDown"]) {
-        [self inject:cmd];
+        [ZMMOTouch power];
+    } else if ([type isEqualToString:@"volUp"]) {
+        [ZMMOTouch volUp];
+    } else if ([type isEqualToString:@"volDown"]) {
+        [ZMMOTouch volDown];
     } else if ([type isEqualToString:@"clipboard"]) {
         if (cmd[@"text"]) {
-            [[UIPasteboard generalPasteboard] setString:cmd[@"text"]];
+            [ZMMOTouch typeText:cmd[@"text"]];
         }
-    }
-}
-
-- (void)injectTap:(int)x y:(int)y {
-    system([[NSString stringWithFormat:
-        @"/usr/bin/autotouch inputText '%d %d tap' 2>/dev/null", x, y] UTF8String]);
-}
-
-- (void)injectSwipe:(int)x y:(int)y x2:(int)x2 y2:(int)y2 {
-    system([[NSString stringWithFormat:
-        @"/usr/bin/autotouch inputText '%d %d swipe %d %d' 2>/dev/null", x, y, x2, y2] UTF8String]);
-}
-
-- (void)inject:(NSDictionary *)cmd {
-    NSString *type = cmd[@"type"] ?: @"";
-    if ([type isEqualToString:@"power"]) {
-        system("/usr/bin/autotouch inputText 'power' 2>/dev/null");
     }
 }
 

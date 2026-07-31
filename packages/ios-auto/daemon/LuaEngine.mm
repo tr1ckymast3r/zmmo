@@ -3,6 +3,7 @@
 // Real Lua would require liblua statically linked — JSC is zero deps
 
 #import "LuaEngine.h"
+#import "ZMMOTouch.h"
 #import <JavaScriptCore/JavaScriptCore.h>
 
 @interface LuaEngine () {
@@ -29,16 +30,16 @@
 
     // Screen / touch
     _ctx[@"tap"] = ^(double x, double y) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText '%f %f tap' 2>/dev/null", x, y] UTF8String]);
+        [ZMMOTouch tap:(int)x y:(int)y];
     };
     _ctx[@"swipe"] = ^(double x1, double y1, double x2, double y2) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText '%f %f swipe %f %f' 2>/dev/null", x1, y1, x2, y2] UTF8String]);
+        [ZMMOTouch swipe:(int)x1 y:(int)y1 toX:(int)x2 toY:(int)y2 duration:300];
     };
     _ctx[@"inputText"] = ^(NSString *text) {
-        system([[NSString stringWithFormat:@"/usr/bin/autotouch inputText '%@' 2>/dev/null", text] UTF8String]);
+        [ZMMOTouch typeText:text];
     };
     _ctx[@"home"] = ^{
-        system("/usr/bin/killall -9 SpringBoard backboardd 2>/dev/null");
+        [ZMMOTouch home];
     };
 
     // File I/O (Lua-compatible)
