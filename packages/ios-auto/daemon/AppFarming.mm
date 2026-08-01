@@ -52,13 +52,15 @@
         return @{@"error": @"Account backup not found. Use backupAcc first.", @"accName": accName};
     }
 
-    // Wipe current app data
-    NSString *cmd = [NSString stringWithFormat:
-        @"/bin/rm -rf '%@'/Documents '%@'/Library '%@'/tmp 2>/dev/null; "
-        @"/bin/mkdir -p '%@'/Documents '%@'/Library/Caches '%@'/tmp",
-        containerPath, containerPath, containerPath,
-        containerPath, containerPath, containerPath];
-    system([cmd UTF8String]);
+    // Wipe current app data using NSFileManager (no shell calls)
+    for (NSString *sub in @[@"Documents", @"Library", @"tmp"]) {
+        NSString *targetDir = [containerPath stringByAppendingPathComponent:sub];
+        [self.fm removeItemAtPath:targetDir error:nil];
+        [self.fm createDirectoryAtPath:targetDir withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    // Also recreate Library/Caches
+    NSString *cachesDir = [containerPath stringByAppendingPathComponent:@"Library/Caches"];
+    [self.fm createDirectoryAtPath:cachesDir withIntermediateDirectories:YES attributes:nil error:nil];
 
     // Copy backup data in
     for (NSString *sub in @[@"Documents", @"Library", @"tmp"]) {
@@ -68,9 +70,17 @@
         if ([_fm fileExistsAtPath:src]) [_fm copyItemAtPath:src toPath:dst error:nil];
     }
 
-    // Open app
+    // Open app using LSApplicationWorkspace (no shell)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        system([[NSString stringWithFormat:@"/usr/bin/open com.%@.app:// 2>/dev/null", bundleID] UTF8String]);
+        void *ls = dlopen("/System/Library/PrivateFrameworks/MobileCoreServices.framework/MobileCoreServices", RTLD_LAZY);
+        if (ls) {
+            void *ws = dlopen("/System/Library/PrivateFrameworks/SpringBoardServices.framework/SpringBoardServices", RTLD_LAZY);
+            if (ws) {
+                void (*openApp)(CFStringRef) = dlsym(ws, "SBSLaunchApplicationWithIdentifier");
+                if (!openApp) openApp = dlsym(ws, "_SBSLaunchApplicationWithIdentifier");
+                if (openApp) openApp((__bridge CFStringRef)bundleID);
+            }
+        }
     });
 
     return @{@"status": @"opened", @"bundleID": bundleID, @"accName": accName};
@@ -126,12 +136,14 @@
     system([[NSString stringWithFormat:@"/usr/bin/killall %@ 2>/dev/null", bundleID] UTF8String]);
     NSString *containerPath = [self containerPathForBundleID:bundleID];
     if (!containerPath) return @{@"error": @"Container not found"};
-    NSString *cmd = [NSString stringWithFormat:
-        @"/bin/rm -rf '%@'/Documents '%@'/Library '%@'/tmp 2>/dev/null; "
-        @"/bin/mkdir -p '%@'/Documents '%@'/Library/Caches '%@'/tmp",
-        containerPath, containerPath, containerPath,
-        containerPath, containerPath, containerPath];
-    system([cmd UTF8String]);
+
+    for (NSString *sub in @[@"Documents", @"Library", @"tmp"]) {
+        NSString *targetDir = [containerPath stringByAppendingPathComponent:sub];
+        [self.fm removeItemAtPath:targetDir error:nil];
+        [self.fm createDirectoryAtPath:targetDir withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    NSString *cachesDir = [containerPath stringByAppendingPathComponent:@"Library/Caches"];
+    [self.fm createDirectoryAtPath:cachesDir withIntermediateDirectories:YES attributes:nil error:nil];
     return @{@"status": @"reset", @"bundleID": bundleID};
 }
 

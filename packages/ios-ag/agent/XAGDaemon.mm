@@ -204,10 +204,12 @@
 - (NSDictionary *)handleOpenApp:(NSString *)name userInfo:(NSDictionary *)info {
     NSString *bundleID = info[@"bundleID"];
     if (!bundleID) return @{@"error": @"bundleID required"};
-    // Open via SpringBoardServices
-    NSString *cmd = [NSString stringWithFormat:@"/usr/bin/open com.%@.app:// 2>/dev/null || \
-                      /usr/bin/uiopen %@ 2>/dev/null", bundleID, bundleID];
-    system([cmd UTF8String]);
+    // Open via SpringBoardServices (no shell)
+    void *sb = dlopen("/System/Library/PrivateFrameworks/SpringBoardServices.framework/SpringBoardServices", RTLD_LAZY);
+    if (sb) {
+        void (*openApp)(CFStringRef) = dlsym(sb, "SBSLaunchApplicationWithIdentifier");
+        if (openApp) openApp((__bridge CFStringRef)bundleID);
+    }
     return @{@"status": @"opened", @"bundleID": bundleID};
 }
 
@@ -230,17 +232,13 @@
 
 - (NSDictionary *)handleCheckIP:(NSString *)name userInfo:(NSDictionary *)info {
     NSString *host = info[@"host"] ?: @"checkip.amazonaws.com";
-    // Use curl to check IP
-    NSString *cmd = [NSString stringWithFormat:@"/usr/bin/curl -s --max-time 5 %@ 2>/dev/null", host];
-    FILE *fp = popen([cmd UTF8String], "r");
+    // Use NSURLSession (no external curl dependency)
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"http://%@", host]];
+    NSData *data = [NSData dataWithContentsOfURL:url];
     NSString *ip = @"unknown";
-    if (fp) {
-        char buf[256] = {0};
-        if (fgets(buf, sizeof(buf), fp)) {
-            ip = [[NSString stringWithUTF8String:buf] stringByTrimmingCharactersInSet:
-                  [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        }
-        pclose(fp);
+    if (data) {
+        ip = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
+              stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     }
     return @{@"ip": ip, @"host": host};
 }

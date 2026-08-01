@@ -3,6 +3,7 @@
 
 #import "XAGRRS.h"
 #import "XAGDeviceInfo.h"
+#import <signal.h>
 
 #define XAG_RRS_DIR @"/var/mobile/ZMMO_RRS"
 
@@ -41,15 +42,25 @@
         [results addObject:r];
     }
 
-    // 2. Keychain wipe (like XoaInfo: chmod -R 600 / keychain-2.*)
+    // 2. Keychain wipe (native NSFileManager, no shell)
     if (wipeKeychain) {
-        system("/bin/chmod -R 600 /private/var/Keychains/keychain-2.* 2>/dev/null");
-        system("/usr/sbin/chown -R _securityd:wheel /private/var/Keychains/keychain-2.* 2>/dev/null");
+        NSString *keychainDir = @"/private/var/Keychains";
+        NSArray *files = [self.fm contentsOfDirectoryAtPath:keychainDir error:nil];
+        for (NSString *f in files) {
+            if ([f hasPrefix:@"keychain-2."]) {
+                NSString *path = [keychainDir stringByAppendingPathComponent:f];
+                NSDictionary *attrs = @{NSFilePosixPermissions: @0600,
+                                         NSFileOwnerAccountName: @"_securityd",
+                                         NSFileGroupOwnerAccountName: @"wheel"};
+                [self.fm setAttributes:attrs ofItemAtPath:path error:nil];
+            }
+        }
         [results addObject:@{@"keychain": @"wiped"}];
     }
 
-    // 3. Clear advertising identifier (IDFA reset like XoaInfo)
-    system("/usr/bin/killall -9 AdSheet 2>/dev/null");
+    // 3. Clear advertising identifier
+    // AdSheet stores IDFA cache — kill it to refresh
+    [[self class] killProcess:@"AdSheet"];
     [results addObject:@{@"idfa": @"cleared"}];
 
     // 4. Kill all relevant services (same list as XoaInfo)
@@ -215,13 +226,14 @@
     // Kill app first
     system([[NSString stringWithFormat:@"/usr/bin/killall %@ 2>/dev/null", bundleID] UTF8String]);
 
-    // Wipe container
-    NSString *cmd = [NSString stringWithFormat:
-        @"/bin/rm -rf '%@'/Documents '%@'/Library '%@'/tmp 2>/dev/null; "
-        @"/bin/mkdir -p '%@'/Documents '%@'/Library/Caches '%@'/tmp",
-        containerPath, containerPath, containerPath,
-        containerPath, containerPath, containerPath];
-    system([cmd UTF8String]);
+    // Wipe container using NSFileManager
+    for (NSString *sub in @[@"Documents", @"Library", @"tmp"]) {
+        NSString *targetDir = [containerPath stringByAppendingPathComponent:sub];
+        [self.fm removeItemAtPath:targetDir error:nil];
+        [self.fm createDirectoryAtPath:targetDir withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    NSString *cachesDir = [containerPath stringByAppendingPathComponent:@"Library/Caches"];
+    [self.fm createDirectoryAtPath:cachesDir withIntermediateDirectories:YES attributes:nil error:nil];
 
     return @{@"status": @"wiped", @"bundleID": bundleID};
 }
@@ -254,6 +266,13 @@
 // ────────────────────────────────────────
 #pragma mark - Helpers
 // ────────────────────────────────────────
+
++ (void)killProcess:(NSString *)processName {
+    // Use killall via system() — simplest IPC for daemon process kills
+    // No ObjC API exists for cross-process SIGKILL on iOS
+    NSString *cmd = [NSString stringWithFormat:@"/usr/bin/killall -9 %@ 2>/dev/null", processName];
+    system([cmd UTF8String]);
+}
 
 - (unsigned long long)dirSize:(NSString *)path {
     unsigned long long size = 0;
