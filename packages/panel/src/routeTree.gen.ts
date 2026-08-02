@@ -9,86 +9,115 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as BackupsRouteImport } from './routes/backups'
-import { Route as DownloadsRouteImport } from './routes/downloads'
+import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as LayoutIndexRouteImport } from './routes/_layout.index'
+import { Route as LayoutBackupsRouteImport } from './routes/_layout.backups'
+import { Route as LayoutDownloadsRouteImport } from './routes/_layout.downloads'
 
-const IndexRoute = IndexRouteImport.update({
+const LayoutRoute = LayoutRouteImport.update({
+  id: '/_layout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => LayoutRoute,
 } as any)
-const BackupsRoute = BackupsRouteImport.update({
+const LayoutBackupsRoute = LayoutBackupsRouteImport.update({
   id: '/backups',
   path: '/backups',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => LayoutRoute,
 } as any)
-const DownloadsRoute = DownloadsRouteImport.update({
+const LayoutDownloadsRoute = LayoutDownloadsRouteImport.update({
   id: '/downloads',
   path: '/downloads',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => LayoutRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/backups': typeof BackupsRoute
-  '/downloads': typeof DownloadsRoute
+  '/': typeof LayoutIndexRoute
+  '/backups': typeof LayoutBackupsRoute
+  '/downloads': typeof LayoutDownloadsRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/backups': typeof BackupsRoute
-  '/downloads': typeof DownloadsRoute
+  '/backups': typeof LayoutBackupsRoute
+  '/downloads': typeof LayoutDownloadsRoute
+  '/': typeof LayoutIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/backups': typeof BackupsRoute
-  '/downloads': typeof DownloadsRoute
+  '/_layout': typeof LayoutRouteWithChildren
+  '/_layout/backups': typeof LayoutBackupsRoute
+  '/_layout/downloads': typeof LayoutDownloadsRoute
+  '/_layout/': typeof LayoutIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths: '/' | '/backups' | '/downloads'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/backups' | '/downloads'
-  id: '__root__' | '/' | '/backups' | '/downloads'
+  to: '/backups' | '/downloads' | '/'
+  id:
+    | '__root__'
+    | '/_layout'
+    | '/_layout/backups'
+    | '/_layout/downloads'
+    | '/_layout/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  BackupsRoute: typeof BackupsRoute
-  DownloadsRoute: typeof DownloadsRoute
+  LayoutRoute: typeof LayoutRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_layout': {
+      id: '/_layout'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof LayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_layout/': {
+      id: '/_layout/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
     }
-    '/backups': {
-      id: '/backups'
+    '/_layout/backups': {
+      id: '/_layout/backups'
       path: '/backups'
       fullPath: '/backups'
-      preLoaderRoute: typeof BackupsRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof LayoutBackupsRouteImport
+      parentRoute: typeof LayoutRoute
     }
-    '/downloads': {
-      id: '/downloads'
+    '/_layout/downloads': {
+      id: '/_layout/downloads'
       path: '/downloads'
       fullPath: '/downloads'
-      preLoaderRoute: typeof DownloadsRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof LayoutDownloadsRouteImport
+      parentRoute: typeof LayoutRoute
     }
   }
 }
 
+interface LayoutRouteChildren {
+  LayoutBackupsRoute: typeof LayoutBackupsRoute
+  LayoutDownloadsRoute: typeof LayoutDownloadsRoute
+  LayoutIndexRoute: typeof LayoutIndexRoute
+}
+
+const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutBackupsRoute: LayoutBackupsRoute,
+  LayoutDownloadsRoute: LayoutDownloadsRoute,
+  LayoutIndexRoute: LayoutIndexRoute,
+}
+
+const LayoutRouteWithChildren =
+  LayoutRoute._addFileChildren(LayoutRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  BackupsRoute: BackupsRoute,
-  DownloadsRoute: DownloadsRoute,
+  LayoutRoute: LayoutRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

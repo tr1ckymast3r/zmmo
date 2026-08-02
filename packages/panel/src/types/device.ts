@@ -97,8 +97,10 @@ export interface Task {
 export interface BackupInfo {
   id: string;
   deviceId: string;
+  deviceSerial?: string;
   filename: string;
   size: number;
+  packages?: string[];
   props: DeviceProps;
   createdAt: string;
 }
