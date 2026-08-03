@@ -165,6 +165,7 @@ function BackupModal({
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [backing, setBacking] = useState(false);
+  const [activePresets, setActivePresets] = useState<Set<string>>(new Set());
 
   // ── Preset groups ──
   const presets: { id: string; label: string; desc: string; pkgs: string[] }[] = [
@@ -200,13 +201,37 @@ function BackupModal({
     },
   ];
 
-  const applyPreset = (pkgs: string[]) => {
+  const applyPreset = (id: string, pkgs: string[]) => {
+    const isActive = activePresets.has(id);
+    setActivePresets((prev) => {
+      const next = new Set(prev);
+      if (isActive) next.delete(id); else next.add(id);
+      return next;
+    });
     setSelected((prev) => {
       const next = new Set(prev);
-      pkgs.forEach((p) => next.add(p));
+      if (isActive) {
+        pkgs.forEach((p) => next.delete(p));
+      } else {
+        pkgs.forEach((p) => next.add(p));
+      }
       return next;
     });
   };
+
+  // Sync activePresets when user manually removes packages
+  useEffect(() => {
+    setActivePresets((prev) => {
+      const next = new Set(prev);
+      for (const id of presets.map((p) => p.id)) {
+        const preset = presets.find((p) => p.id === id)!;
+        if (next.has(id) && preset.pkgs.some((p) => !selected.has(p))) {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
+  }, [selected, presets]);
 
   // Load packages when modal opens
   useEffect(() => {
@@ -295,7 +320,7 @@ function BackupModal({
         <div className="flex items-center justify-between text-[10px] text-zinc-500">
           <span>{loading ? "Loading..." : `${selected.size} selected`}</span>
           {selected.size > 0 && (
-            <button onClick={() => setSelected(new Set())} className="text-red-400 hover:underline">
+            <button onClick={() => { setSelected(new Set()); setActivePresets(new Set()); }} className="text-red-400 hover:underline">
               Clear all
             </button>
           )}
@@ -306,13 +331,16 @@ function BackupModal({
           {presets.map((preset) => (
             <button
               key={preset.id}
-              onClick={() => applyPreset(preset.pkgs)}
-              className="group relative text-[10px] px-2 py-1 rounded bg-zinc-800/70 border border-zinc-700/50
-                         hover:bg-zinc-700 hover:border-zinc-600 transition-colors text-zinc-400 hover:text-zinc-200"
+              onClick={() => applyPreset(preset.id, preset.pkgs)}
+              className={`group relative text-[10px] px-2 py-1 rounded border transition-colors
+                ${activePresets.has(preset.id)
+                  ? "bg-blue-600/20 border-blue-500/50 text-blue-300"
+                  : "bg-zinc-800/70 border-zinc-700/50 text-zinc-400 hover:bg-zinc-700 hover:border-zinc-600 hover:text-zinc-200"
+                }`}
               title={preset.desc}
             >
               {preset.label}
-              <span className="ml-1 text-zinc-600 group-hover:text-zinc-500">{preset.pkgs.length}</span>
+              <span className="ml-1 opacity-60">{preset.pkgs.length}</span>
             </button>
           ))}
         </div>
