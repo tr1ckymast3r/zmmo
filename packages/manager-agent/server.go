@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1027,40 +1025,29 @@ func handleBackups(w http.ResponseWriter, r *http.Request) {
 
 		serial := getDeviceSerial(body.DeviceID)
 
-		// Build tar command on device (toybox tar: no -z, gzip later)
-		// Use /sdcard which always has write permission
-		tarBase := fmt.Sprintf("zmmo-tar-%s", timestamp)
-		deviceTar := "/sdcard/" + tarBase + ".tar"
-		tarCmd := fmt.Sprintf("cd /data/data && tar cf %s %s 2>&1", deviceTar,
-			strings.Join(body.Packages, " "))
+		// tar → pipe → gzip on device (both built-in toybox)
+		// toybox tar doesn't support -z, but gzip pipe works
+		deviceTarGz := fmt.Sprintf("/sdcard/zmmo-backup-%s.tar.gz", timestamp)
+		tarCmd := fmt.Sprintf("cd /data/data && tar cf - %s 2>/dev/null | gzip > %s",
+			strings.Join(body.Packages, " "), deviceTarGz)
 
-		log.Printf("[backup:%s] creating tar on device %s: %s", id, serial, tarCmd)
+		log.Printf("[backup:%s] creating tar.gz on device %s", id, serial)
 		out, err := adbShell(body.DeviceID, tarCmd)
 		if err != nil {
-			log.Printf("[backup:%s] tar stderr: %s", id, out)
-			adbShell(body.DeviceID, "rm -f "+deviceTar)
-			writeError(w, 500, "tar on device failed: "+err.Error())
+			log.Printf("[backup:%s] tar+gzip error: %v, output: %s", id, err, out)
+			adbShell(body.DeviceID, "rm -f "+deviceTarGz)
+			writeError(w, 500, "backup on device failed: "+err.Error())
 			return
 		}
 
-		// Pull tar from device
-		tarLocal := filepath.Join(targetDir, tarBase+".tar")
-		log.Printf("[backup:%s] pulling %s → %s", id, deviceTar, tarLocal)
-		if err := adbPull(body.DeviceID, deviceTar, tarLocal); err != nil {
-			adbShell(body.DeviceID, "rm -f "+deviceTar)
+		// Pull compressed tar.gz from device
+		log.Printf("[backup:%s] pulling %s → %s", id, deviceTarGz, localPath)
+		if err := adbPull(body.DeviceID, deviceTarGz, localPath); err != nil {
+			adbShell(body.DeviceID, "rm -f "+deviceTarGz)
 			writeError(w, 500, "pull failed: "+err.Error())
 			return
 		}
-		adbShell(body.DeviceID, "rm -f "+deviceTar)
-
-		// Gzip on server
-		tarData, _ := os.ReadFile(tarLocal)
-		var gzBuf bytes.Buffer
-		gw := gzip.NewWriter(&gzBuf)
-		gw.Write(tarData)
-		gw.Close()
-		os.Remove(tarLocal)
-		os.WriteFile(localPath, gzBuf.Bytes(), 0644)
+		adbShell(body.DeviceID, "rm -f "+deviceTarGz)
 
 		// Get file size
 		fi, err := os.Stat(localPath)
