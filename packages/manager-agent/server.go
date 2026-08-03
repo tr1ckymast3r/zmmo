@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1025,31 +1027,40 @@ func handleBackups(w http.ResponseWriter, r *http.Request) {
 
 		serial := getDeviceSerial(body.DeviceID)
 
-		// Build tar command on device
-		var dataPaths []string
-		for _, pkg := range body.Packages {
-			dataPaths = append(dataPaths, fmt.Sprintf("/data/data/%s", pkg))
-		}
-		tarCmd := fmt.Sprintf("tar czf /data/local/tmp/%s %s 2>/dev/null", filename, strings.Join(dataPaths, " "))
-		
+		// Build tar command on device (toybox tar: no -z, gzip later)
+		// Use /sdcard which always has write permission
+		tarBase := fmt.Sprintf("zmmo-tar-%s", timestamp)
+		deviceTar := "/sdcard/" + tarBase + ".tar"
+		tarCmd := fmt.Sprintf("cd /data/data && tar cf %s %s 2>&1", deviceTar,
+			strings.Join(body.Packages, " "))
+
 		log.Printf("[backup:%s] creating tar on device %s: %s", id, serial, tarCmd)
-		_, err := adbShell(body.DeviceID, tarCmd)
+		out, err := adbShell(body.DeviceID, tarCmd)
 		if err != nil {
+			log.Printf("[backup:%s] tar stderr: %s", id, out)
+			adbShell(body.DeviceID, "rm -f "+deviceTar)
 			writeError(w, 500, "tar on device failed: "+err.Error())
 			return
 		}
 
 		// Pull tar from device
-		log.Printf("[backup:%s] pulling %s → %s", id, filename, localPath)
-		err = adbPull(body.DeviceID, "/data/local/tmp/"+filename, localPath)
-		if err != nil {
-			adbShell(body.DeviceID, "rm -f /data/local/tmp/"+filename)
+		tarLocal := filepath.Join(targetDir, tarBase+".tar")
+		log.Printf("[backup:%s] pulling %s → %s", id, deviceTar, tarLocal)
+		if err := adbPull(body.DeviceID, deviceTar, tarLocal); err != nil {
+			adbShell(body.DeviceID, "rm -f "+deviceTar)
 			writeError(w, 500, "pull failed: "+err.Error())
 			return
 		}
+		adbShell(body.DeviceID, "rm -f "+deviceTar)
 
-		// Clean up device temp file
-		adbShell(body.DeviceID, "rm -f /data/local/tmp/"+filename)
+		// Gzip on server
+		tarData, _ := os.ReadFile(tarLocal)
+		var gzBuf bytes.Buffer
+		gw := gzip.NewWriter(&gzBuf)
+		gw.Write(tarData)
+		gw.Close()
+		os.Remove(tarLocal)
+		os.WriteFile(localPath, gzBuf.Bytes(), 0644)
 
 		// Get file size
 		fi, err := os.Stat(localPath)
