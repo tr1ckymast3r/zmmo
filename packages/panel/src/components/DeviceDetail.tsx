@@ -219,20 +219,6 @@ function BackupModal({
     });
   };
 
-  // Sync activePresets when user manually removes packages
-  useEffect(() => {
-    setActivePresets((prev) => {
-      const next = new Set(prev);
-      for (const id of presets.map((p) => p.id)) {
-        const preset = presets.find((p) => p.id === id)!;
-        if (next.has(id) && preset.pkgs.some((p) => !selected.has(p))) {
-          next.delete(id);
-        }
-      }
-      return next;
-    });
-  }, [selected, presets]);
-
   // Load packages when modal opens
   useEffect(() => {
     if (!open || !deviceId) return;
@@ -262,6 +248,16 @@ function BackupModal({
       const next = new Set(prev);
       if (next.has(pkg)) next.delete(pkg);
       else next.add(pkg);
+      return next;
+    });
+    // Deactivate preset if this package belonged to an active preset
+    setActivePresets((prev) => {
+      const next = new Set(prev);
+      for (const preset of presets) {
+        if (prev.has(preset.id) && preset.pkgs.includes(pkg)) {
+          next.delete(preset.id);
+        }
+      }
       return next;
     });
   };
