@@ -226,40 +226,17 @@ function BackupModal({
           <DialogTitle className="text-sm">📦 Backup App Data</DialogTitle>
         </DialogHeader>
 
-        {/* Search + autocomplete dropdown */}
-        <div className="relative">
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Search packages..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-7 text-[11px] flex-1 bg-zinc-800 border-zinc-700"
-            />
-            <button onClick={selectAll} className="text-[10px] text-blue-400 hover:underline whitespace-nowrap">
-              {selected.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
-            </button>
-          </div>
-          {/* Autocomplete suggestions */}
-          {search && filtered.length > 0 && filtered.length <= 8 && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-              {filtered.map((pkg) => (
-                <div
-                  key={pkg.package}
-                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-700 cursor-pointer text-[11px]"
-                  onClick={() => { toggle(pkg.package); setSearch(""); }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(pkg.package)}
-                    readOnly
-                    className="w-3 h-3 accent-blue-500"
-                  />
-                  <span className="text-zinc-300 font-mono truncate">{pkg.package}</span>
-                  {pkg.name && <span className="text-zinc-500 truncate ml-auto">{pkg.name}</span>}
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Search */}
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search packages..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-[11px] flex-1 bg-zinc-800 border-zinc-700"
+          />
+          <button onClick={selectAll} className="text-[10px] text-blue-400 hover:underline whitespace-nowrap">
+            {selected.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
+          </button>
         </div>
 
         {/* Stats bar */}
