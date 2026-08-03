@@ -166,6 +166,48 @@ function BackupModal({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [backing, setBacking] = useState(false);
 
+  // ── Preset groups ──
+  const presets: { id: string; label: string; desc: string; pkgs: string[] }[] = [
+    {
+      id: "google",
+      label: "🔐 Google Account",
+      desc: "Play Services + GSF + Login + Play Store — keeps Google accounts after fingerprint change",
+      pkgs: ["com.google.android.gms", "com.google.android.gsf", "com.google.android.gsf.login", "com.android.vending"],
+    },
+    {
+      id: "social",
+      label: "💬 Social Apps",
+      desc: "Zalo, Facebook, Messenger, Telegram, WhatsApp — chat & social media",
+      pkgs: ["com.zing.zalo", "com.facebook.katana", "com.facebook.orca", "org.telegram.messenger", "com.whatsapp"],
+    },
+    {
+      id: "banking",
+      label: "🏦 Banking & Finance",
+      desc: "Banking apps, e-wallets — MoMo, VCB, MB Bank, Vietinbank, TPBank, BIDV",
+      pkgs: ["com.mservice.momotransfer", "com.vnpay.wallet", "com.vcb.vietcombank", "com.mbmobile", "com.vietinbank.ipay", "com.tpbank.mobile", "com.bidv.smartbanking"],
+    },
+    {
+      id: "google_full",
+      label: "🟢 Google Full Suite",
+      desc: "All Google apps — Gmail, Drive, Photos, Maps, YouTube, Chrome, Meet, Calendar",
+      pkgs: ["com.google.android.gm", "com.google.android.apps.docs", "com.google.android.apps.photos", "com.google.android.apps.maps", "com.google.android.youtube", "com.android.chrome", "com.google.android.apps.meetings", "com.google.android.calendar"],
+    },
+    {
+      id: "system",
+      label: "⚙️ System IDs",
+      desc: "Settings app + system UI — preserves device config, wallpaper, ringtone",
+      pkgs: ["com.android.settings", "com.android.systemui", "com.android.providers.settings"],
+    },
+  ];
+
+  const applyPreset = (pkgs: string[]) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      pkgs.forEach((p) => next.add(p));
+      return next;
+    });
+  };
+
   // Load packages when modal opens
   useEffect(() => {
     if (!open || !deviceId) return;
@@ -257,6 +299,22 @@ function BackupModal({
               Clear all
             </button>
           )}
+        </div>
+
+        {/* Preset groups */}
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => applyPreset(preset.pkgs)}
+              className="group relative text-[10px] px-2 py-1 rounded bg-zinc-800/70 border border-zinc-700/50
+                         hover:bg-zinc-700 hover:border-zinc-600 transition-colors text-zinc-400 hover:text-zinc-200"
+              title={preset.desc}
+            >
+              {preset.label}
+              <span className="ml-1 text-zinc-600 group-hover:text-zinc-500">{preset.pkgs.length}</span>
+            </button>
+          ))}
         </div>
 
         {/* Selected packages — fixed height, scrollable */}
