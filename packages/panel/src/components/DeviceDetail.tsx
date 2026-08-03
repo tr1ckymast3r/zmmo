@@ -226,25 +226,56 @@ function BackupModal({
           <DialogTitle className="text-sm">📦 Backup App Data</DialogTitle>
         </DialogHeader>
 
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Search packages..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-7 text-[11px] flex-1 bg-zinc-800 border-zinc-700"
-          />
-          <button onClick={selectAll} className="text-[10px] text-blue-400 hover:underline whitespace-nowrap">
-            {selected.size === filtered.length ? "Deselect all" : "Select all"}
-          </button>
+        {/* Search + autocomplete dropdown */}
+        <div className="relative">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search packages..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-7 text-[11px] flex-1 bg-zinc-800 border-zinc-700"
+            />
+            <button onClick={selectAll} className="text-[10px] text-blue-400 hover:underline whitespace-nowrap">
+              {selected.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
+            </button>
+          </div>
+          {/* Autocomplete suggestions */}
+          {search && filtered.length > 0 && filtered.length <= 8 && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+              {filtered.map((pkg) => (
+                <div
+                  key={pkg.package}
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-700 cursor-pointer text-[11px]"
+                  onClick={() => { toggle(pkg.package); setSearch(""); }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(pkg.package)}
+                    readOnly
+                    className="w-3 h-3 accent-blue-500"
+                  />
+                  <span className="text-zinc-300 font-mono truncate">{pkg.package}</span>
+                  {pkg.name && <span className="text-zinc-500 truncate ml-auto">{pkg.name}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="text-[10px] text-zinc-500">
-          {loading ? "Loading..." : `${selected.size} / ${packages.length} selected`}
+        {/* Stats bar */}
+        <div className="flex items-center justify-between text-[10px] text-zinc-500">
+          <span>{loading ? "Loading..." : `${selected.size} / ${packages.length} selected`}</span>
+          {selected.size > 0 && (
+            <button onClick={() => setSelected(new Set())} className="text-red-400 hover:underline">
+              Clear
+            </button>
+          )}
         </div>
 
-        <ScrollArea className="flex-1 border border-zinc-800 rounded-lg">
+        {/* Package list — fixed height, scrollable */}
+        <ScrollArea className="h-64 border border-zinc-800 rounded-lg">
           {loading ? (
-            <div className="flex items-center justify-center h-40">
+            <div className="flex items-center justify-center h-64">
               <div className="w-5 h-5 border-2 border-zinc-500 border-t-blue-500 rounded-full animate-spin" />
             </div>
           ) : (
@@ -254,12 +285,16 @@ function BackupModal({
                   key={pkg.package}
                   className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800/50 rounded cursor-pointer"
                 >
-                  <Switch
+                  <input
+                    type="checkbox"
                     checked={selected.has(pkg.package)}
-                    onCheckedChange={() => toggle(pkg.package)}
-                    className="scale-75"
+                    onChange={() => toggle(pkg.package)}
+                    className="w-3.5 h-3.5 accent-blue-500 rounded"
                   />
                   <span className="text-[11px] text-zinc-300 font-mono truncate">{pkg.package}</span>
+                  {pkg.name && (
+                    <span className="text-[10px] text-zinc-500 truncate ml-auto hidden sm:inline">{pkg.name}</span>
+                  )}
                 </label>
               ))}
               {filtered.length === 0 && !loading && (
