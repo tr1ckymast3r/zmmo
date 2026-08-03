@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 // ── Types ──
@@ -1220,6 +1221,99 @@ func handleLicenseActivate(w http.ResponseWriter, r *http.Request) {
 
 // ── Server Control ──
 
+// ── Agent WebSocket Registry ──
+
+type AgentConn struct {
+	DeviceID string
+	Conn     *websocket.Conn
+	ConnectedAt time.Time
+	LastSeen    time.Time
+	Mu          sync.Mutex
+}
+
+var (
+	agentConns   = make(map[string]*AgentConn)
+	agentConnsMu sync.RWMutex
+)
+
+func handleAgentWS(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("[agent-ws] upgrade: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// Read registration message
+	var regMsg struct {
+		Type   string                 `json:"type"`
+		Device map[string]interface{} `json:"device"`
+	}
+	if err := conn.ReadJSON(&regMsg); err != nil || regMsg.Type != "register" {
+		log.Printf("[agent-ws] bad register: %v", err)
+		return
+	}
+
+	deviceID := "unknown"
+	if regMsg.Device != nil {
+		if id, ok := regMsg.Device["serial"].(string); ok && id != "" {
+			deviceID = id
+		}
+	}
+	log.Printf("[agent-ws] agent %s connected", deviceID)
+
+	ac := &AgentConn{
+		DeviceID:    deviceID,
+		Conn:        conn,
+		ConnectedAt: time.Now(),
+		LastSeen:    time.Now(),
+	}
+	agentConnsMu.Lock()
+	agentConns[deviceID] = ac
+	agentConnsMu.Unlock()
+
+	defer func() {
+		agentConnsMu.Lock()
+		delete(agentConns, deviceID)
+		agentConnsMu.Unlock()
+		log.Printf("[agent-ws] agent %s disconnected", deviceID)
+	}()
+
+	// Read loop — handle messages from agent
+	for {
+		var msg struct {
+			Type   string          `json:"type"`
+			ID     string          `json:"id"`
+			Data   json.RawMessage `json:"data"`
+			Error  string          `json:"error"`
+		}
+		if err := conn.ReadJSON(&msg); err != nil {
+			if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+				log.Printf("[agent-ws] %s read: %v", deviceID, err)
+			}
+			return
+		}
+		ac.LastSeen = time.Now()
+
+		switch msg.Type {
+		case "pong":
+			// keepalive acknowledged
+		case "getProps_result", "setProp_result", "resetProps_result",
+			"screenshot_result", "tap_result", "swipe_result",
+			"install_result", "uninstall_result", "runCmd_result", "reboot_result":
+			// Forward to task completion handler (TODO)
+			log.Printf("[agent-ws] %s: %s completed", deviceID, msg.Type)
+		default:
+			log.Printf("[agent-ws] %s: unknown msg type %s", deviceID, msg.Type)
+		}
+	}
+}
+
+// ── Server Control ──
+
 func startServer() error {
 	serverMu.Lock()
 	defer serverMu.Unlock()
@@ -1249,6 +1343,7 @@ func startServer() error {
 	mux.HandleFunc("/packages/", handlePackages)
 	mux.HandleFunc("/adb/", handleADB)
 	mux.HandleFunc("/license/activate", handleLicenseActivate)
+	mux.HandleFunc("/agent/ws", handleAgentWS)
 
 	for _, port := range []int{55555, 55556} {
 		addr := fmt.Sprintf(":%d", port)
