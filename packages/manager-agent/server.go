@@ -1025,25 +1025,44 @@ func handleBackups(w http.ResponseWriter, r *http.Request) {
 
 		serial := getDeviceSerial(body.DeviceID)
 
-		// tar → pipe → gzip on device (both built-in toybox)
-		// toybox tar doesn't support -z, but gzip pipe works
-		deviceTarGz := fmt.Sprintf("/sdcard/zmmo-backup-%s.tar.gz", timestamp)
-		tarCmd := fmt.Sprintf("cd /data/data && tar cf - %s 2>/dev/null | gzip > %s",
-			strings.Join(body.Packages, " "), deviceTarGz)
+		deviceTar := fmt.Sprintf("/sdcard/zmmo-tar-%s.tar", timestamp)
+		deviceTarGz := deviceTar + ".gz"
+		pkgList := strings.Join(body.Packages, " ")
 
-		log.Printf("[backup:%s] creating tar.gz on device %s", id, serial)
-		out, err := adbShell(body.DeviceID, tarCmd)
-		if err != nil {
-			log.Printf("[backup:%s] tar+gzip error: %v, output: %s", id, err, out)
-			adbShell(body.DeviceID, "rm -f "+deviceTarGz)
-			writeError(w, 500, "backup on device failed: "+err.Error())
-			return
+		// Try via droid-agent WebSocket first (no quoting issues, runs as root)
+		agentUsed := false
+		if ac := getAgentConn(serial); ac != nil {
+			script := fmt.Sprintf("cd /data/data && tar cf %s %s 2>/dev/null && gzip -f %s", deviceTar, pkgList, deviceTar)
+			log.Printf("[backup:%s] via agent on %s", id, serial)
+			resp, err := sendAgentCmd(ac, "runCmd", map[string]string{"command": script}, 30*time.Second)
+			if err != nil || resp["error"] != "" {
+				errStr := ""
+				if err != nil { errStr = err.Error() }
+				if resp["error"] != "" { errStr = resp["error"] }
+				log.Printf("[backup:%s] agent error: %s", id, errStr)
+				writeError(w, 500, "backup on device failed: "+errStr)
+				return
+			}
+			agentUsed = true
+		}
+
+		// Fallback: ADB shell
+		if !agentUsed {
+			script := fmt.Sprintf("cd /data/data && tar cf %s %s 2>/dev/null && gzip -f %s", deviceTar, pkgList, deviceTar)
+			tarCmd := fmt.Sprintf("su -c '%s'", script)
+			log.Printf("[backup:%s] via adb on %s", id, serial)
+			out, err := adbShell(body.DeviceID, tarCmd)
+			if err != nil {
+				log.Printf("[backup:%s] adb error: %v, output: %s", id, err, out)
+				writeError(w, 500, "backup on device failed: "+err.Error())
+				return
+			}
 		}
 
 		// Pull compressed tar.gz from device
 		log.Printf("[backup:%s] pulling %s → %s", id, deviceTarGz, localPath)
-		if err := adbPull(body.DeviceID, deviceTarGz, localPath); err != nil {
-			adbShell(body.DeviceID, "rm -f "+deviceTarGz)
+		if err := adbPull(serial, deviceTarGz, localPath); err != nil {
+			adbShell(serial, "rm -f "+deviceTarGz)
 			writeError(w, 500, "pull failed: "+err.Error())
 			return
 		}
@@ -1227,12 +1246,61 @@ type AgentConn struct {
 	ConnectedAt time.Time
 	LastSeen    time.Time
 	Mu          sync.Mutex
+	pending     map[string]chan map[string]string
 }
 
 var (
 	agentConns   = make(map[string]*AgentConn)
 	agentConnsMu sync.RWMutex
 )
+
+// getAgentConn returns the WebSocket connection for a device serial
+func getAgentConn(serial string) *AgentConn {
+	agentConnsMu.RLock()
+	defer agentConnsMu.RUnlock()
+	return agentConns[serial]
+}
+
+// sendAgentCmd sends a command to a connected agent and waits for the response
+func sendAgentCmd(ac *AgentConn, cmdType string, data interface{}, timeout time.Duration) (map[string]string, error) {
+	ac.Mu.Lock()
+
+	// Create response channel
+	respCh := make(chan map[string]string, 1)
+	id := uuid.New().String()
+	if ac.pending == nil {
+		ac.pending = make(map[string]chan map[string]string)
+	}
+	ac.pending[id] = respCh
+	ac.Mu.Unlock()
+
+	defer func() {
+		ac.Mu.Lock()
+		delete(ac.pending, id)
+		ac.Mu.Unlock()
+	}()
+
+	// Marshal data
+	dataBytes, _ := json.Marshal(data)
+
+	// Send command
+	cmd := map[string]interface{}{
+		"type": cmdType,
+		"id":   id,
+		"data": json.RawMessage(dataBytes),
+	}
+	if err := ac.Conn.WriteJSON(cmd); err != nil {
+		return nil, fmt.Errorf("send: %w", err)
+	}
+
+	// Wait for response
+	select {
+	case resp := <-respCh:
+		return resp, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("timeout waiting for %s", cmdType)
+	}
+}
 
 func handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
@@ -1299,13 +1367,33 @@ func handleAgentWS(w http.ResponseWriter, r *http.Request) {
 		switch msg.Type {
 		case "pong":
 			// keepalive acknowledged
-		case "getProps_result", "setProp_result", "resetProps_result",
-			"screenshot_result", "tap_result", "swipe_result",
-			"install_result", "uninstall_result", "runCmd_result", "reboot_result":
-			// Forward to task completion handler (TODO)
-			log.Printf("[agent-ws] %s: %s completed", deviceID, msg.Type)
 		default:
-			log.Printf("[agent-ws] %s: unknown msg type %s", deviceID, msg.Type)
+			// Check if this is a command result (type ends with _result)
+			if strings.HasSuffix(msg.Type, "_result") {
+				// Route to pending callback
+				ac.Mu.Lock()
+				if ch, ok := ac.pending[msg.ID]; ok {
+					resp := map[string]string{}
+					if msg.Error != "" {
+						resp["error"] = msg.Error
+					}
+					// Try to parse data as string output
+					if msg.Data != nil {
+						var resultMap map[string]string
+						if json.Unmarshal(msg.Data, &resultMap) == nil {
+							for k, v := range resultMap {
+								resp[k] = v
+							}
+						} else {
+							resp["output"] = string(msg.Data)
+						}
+					}
+					ch <- resp
+				}
+				ac.Mu.Unlock()
+			} else {
+				log.Printf("[agent-ws] %s: unknown msg type %s", deviceID, msg.Type)
+			}
 		}
 	}
 }
