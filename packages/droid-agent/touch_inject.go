@@ -29,6 +29,7 @@ const (
 	ABS_MT_POSITION_Y  = 0x36 // 54
 	ABS_MT_PRESSURE    = 0x30 // 48
 	ABS_MT_SLOT        = 0x2f // 47
+	ABS_MT_TOUCH_MAJOR = 0x30 // mapped same as pressure for simplicity
 )
 
 // InputEvent is the raw Linux input_event struct (24 bytes on 64-bit)
@@ -255,11 +256,11 @@ func injectSwipeSendevent(dev string, x1, y1, x2, y2 int32, duration int) error 
 // ── Fallback chain ──
 
 // injectTouchIntelligently chooses the best injection method.
-// Priority: sendevent direct > sendevent binary > input cmd
+// Priority: sendevent direct > uinput virtual > sendevent binary > input cmd
 func injectTouchIntelligently(action string, params map[string]int32) (method string, err error) {
 	dev := findTouchDevice()
 
-	// Method 1: sendevent direct (most stealth)
+	// Method 1: sendevent direct to real touchscreen (stealth)
 	if dev != "" {
 		switch action {
 		case "tap":
@@ -278,8 +279,27 @@ func injectTouchIntelligently(action string, params map[string]int32) (method st
 		}
 	}
 
-	// Method 2: fallback — caller uses input tap/swipe
-	return "input", fmt.Errorf("sendevent unavailable, fall back to input cmd")
+	// Method 2: uinput virtual touch device (most stealth, separate device)
+	if _, err2 := os.Stat("/dev/uinput"); err2 == nil {
+		switch action {
+		case "tap":
+			x, y := params["x"], params["y"]
+			if err := injectTapUinput(x, y); err == nil {
+				return "uinput", nil
+			}
+		case "swipe":
+			x1, y1 := params["x1"], params["y1"]
+			x2, y2 := params["x2"], params["y2"]
+			dur := int(params["duration"])
+			if dur == 0 { dur = 300 }
+			if err := injectSwipeUinput(x1, y1, x2, y2, dur); err == nil {
+				return "uinput", nil
+			}
+		}
+	}
+
+	// Method 3: fallback — caller uses input tap/swipe
+	return "input", fmt.Errorf("sendevent & uinput unavailable, fall back to input cmd")
 }
 
 // cachedTouchDev is a thread-safe lookup
