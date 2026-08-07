@@ -1,5 +1,6 @@
 // touch.go — Touch injection + screenshot
-// Uses input tap/swipe + screencap (built into Android)
+// Fallback chain: sendevent (direct) → sendevent (binary) → input cmd
+// touch_inject.go provides low-level /dev/input/eventX injection
 
 package main
 
@@ -19,7 +20,7 @@ type TouchParams struct {
 	Y2       int    `json:"y2"`
 	Duration int    `json:"duration"` // ms for swipe
 	Text     string `json:"text"`
-	Action   string `json:"action"` // "tap", "swipe", "home", "power", "volUp", "volDown"
+	Action   string `json:"action"` // "tap", "swipe", "home", "power", "back", "volUp", "volDown"
 }
 
 func handleTouch(raw json.RawMessage) (map[string]string, error) {
@@ -32,24 +33,44 @@ func handleTouch(raw json.RawMessage) (map[string]string, error) {
 
 	switch p.Action {
 	case "tap":
-		cmd := fmt.Sprintf("input tap %d %d", p.X, p.Y)
-		out, err := runShell(cmd)
+		// Try sendevent first, fallback to input cmd
+		params := map[string]int32{"x": int32(p.X), "y": int32(p.Y)}
+		method, err := injectTouchIntelligently("tap", params)
 		if err != nil {
-			return nil, fmt.Errorf("tap: %w (%s)", err, out)
+			// Fallback: standard input command
+			method = "input"
+			cmd := fmt.Sprintf("input tap %d %d", p.X, p.Y)
+			out, err2 := runShell(cmd)
+			if err2 != nil {
+				return nil, fmt.Errorf("tap: %w (%s)", err2, out)
+			}
 		}
 		result["tap"] = fmt.Sprintf("%d,%d", p.X, p.Y)
+		result["method"] = method
 
 	case "swipe":
-		dur := p.Duration
-		if dur == 0 {
-			dur = 300
+		// Try sendevent first, fallback to input cmd
+		params := map[string]int32{
+			"x1": int32(p.X), "y1": int32(p.Y),
+			"x2": int32(p.X2), "y2": int32(p.Y2),
+			"duration": int32(p.Duration),
 		}
-		cmd := fmt.Sprintf("input swipe %d %d %d %d %d", p.X, p.Y, p.X2, p.Y2, dur)
-		out, err := runShell(cmd)
+		method, err := injectTouchIntelligently("swipe", params)
 		if err != nil {
-			return nil, fmt.Errorf("swipe: %w (%s)", err, out)
+			// Fallback: standard input command
+			method = "input"
+			dur := p.Duration
+			if dur == 0 {
+				dur = 300
+			}
+			cmd := fmt.Sprintf("input swipe %d %d %d %d %d", p.X, p.Y, p.X2, p.Y2, dur)
+			out, err2 := runShell(cmd)
+			if err2 != nil {
+				return nil, fmt.Errorf("swipe: %w (%s)", err2, out)
+			}
 		}
-		result["swipe"] = fmt.Sprintf("%d,%d → %d,%d (%dms)", p.X, p.Y, p.X2, p.Y2, dur)
+		result["swipe"] = fmt.Sprintf("%d,%d → %d,%d (%dms)", p.X, p.Y, p.X2, p.Y2, p.Duration)
+		result["method"] = method
 
 	case "home":
 		out, err := runShell("input keyevent KEYCODE_HOME")
