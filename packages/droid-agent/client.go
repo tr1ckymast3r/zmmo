@@ -131,7 +131,8 @@ func (c *AgentClient) handleMessage(msg *AgentMessage) {
 		c.handleGetProps(msg)
 		return
 	case "setProp", "resetProps", "screenshot", "tap", "swipe",
-		"install", "uninstall", "runCmd", "reboot", "wipeApp", "backupAcc":
+		"install", "uninstall", "runCmd", "reboot", "wipeApp", "backupAcc",
+		"loadSpoof", "saveSpoof", "applySpoof", "deleteSpoof":
 		// Route to registered handler
 		handler, ok := c.Handlers[msg.Type]
 		if !ok {

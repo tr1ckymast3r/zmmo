@@ -67,6 +67,22 @@ func buildHandlers() map[string]CommandHandler {
 		"runCmd": func(msg *AgentMessage) (interface{}, error) {
 			return handleRunCmd(msg.Data)
 		},
+
+		"loadSpoof": func(msg *AgentMessage) (interface{}, error) {
+			return handleLoadSpoof()
+		},
+
+		"saveSpoof": func(msg *AgentMessage) (interface{}, error) {
+			return handleSaveSpoof(msg.Data)
+		},
+
+		"applySpoof": func(msg *AgentMessage) (interface{}, error) {
+			return handleApplySpoof()
+		},
+
+		"deleteSpoof": func(msg *AgentMessage) (interface{}, error) {
+			return handleDeleteSpoof()
+		},
 	}
 }
 

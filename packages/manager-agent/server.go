@@ -781,6 +781,15 @@ func handleDevice(w http.ResponseWriter, r *http.Request) {
 		}
 		applyProps(found.Serial, found.Props)
 		writeJSON(w, map[string]bool{"ok": true})
+	// ── Spoof profile (persistent) ──
+	case subPath == "spoof" && r.Method == "GET":
+		handleDeviceSpoofRead(found, w)
+	case subPath == "spoof" && r.Method == "PUT":
+		handleDeviceSpoofSave(found, r, w)
+	case subPath == "spoof/apply" && r.Method == "POST":
+		handleDeviceSpoofApply(found, w)
+	case subPath == "spoof" && r.Method == "DELETE":
+		handleDeviceSpoofDelete(found, w)
 	default:
 		writeError(w, 405, "method not allowed")
 	}
@@ -797,6 +806,72 @@ func applyProps(serial string, props *DeviceProps) {
 			cmdHide("adb", "-s", serial, "shell", "setprop "+prop+" "+pv.Value).Run()
 		}
 	}
+}
+
+// ── Spoof profile handlers (delegated to droid-agent via WebSocket) ──
+
+func handleDeviceSpoofRead(dev *DeviceInfo, w http.ResponseWriter) {
+	if ac := getAgentConn(dev.Serial); ac != nil {
+		resp, err := sendAgentCmd(ac, "loadSpoof", nil, 10*time.Second)
+		if err != nil {
+			writeError(w, 500, "agent: "+err.Error())
+			return
+		}
+		writeJSON(w, resp)
+		return
+	}
+	writeError(w, 503, "droid-agent not connected — spoof requires agent")
+}
+
+func handleDeviceSpoofSave(dev *DeviceInfo, r *http.Request, w http.ResponseWriter) {
+	ac := getAgentConn(dev.Serial)
+	if ac == nil {
+		writeError(w, 503, "droid-agent not connected")
+		return
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "invalid JSON")
+		return
+	}
+
+	resp, err := sendAgentCmd(ac, "saveSpoof", body, 10*time.Second)
+	if err != nil {
+		writeError(w, 500, "agent: "+err.Error())
+		return
+	}
+	writeJSON(w, resp)
+}
+
+func handleDeviceSpoofApply(dev *DeviceInfo, w http.ResponseWriter) {
+	ac := getAgentConn(dev.Serial)
+	if ac == nil {
+		writeError(w, 503, "droid-agent not connected")
+		return
+	}
+
+	resp, err := sendAgentCmd(ac, "applySpoof", nil, 15*time.Second)
+	if err != nil {
+		writeError(w, 500, "agent: "+err.Error())
+		return
+	}
+	writeJSON(w, resp)
+}
+
+func handleDeviceSpoofDelete(dev *DeviceInfo, w http.ResponseWriter) {
+	ac := getAgentConn(dev.Serial)
+	if ac == nil {
+		writeError(w, 503, "droid-agent not connected")
+		return
+	}
+
+	resp, err := sendAgentCmd(ac, "deleteSpoof", nil, 10*time.Second)
+	if err != nil {
+		writeError(w, 500, "agent: "+err.Error())
+		return
+	}
+	writeJSON(w, resp)
 }
 
 func handleTasks(w http.ResponseWriter, r *http.Request) {

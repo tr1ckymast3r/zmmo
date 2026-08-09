@@ -48,6 +48,9 @@ func main() {
 	log.Printf("[droid-agent] device: %s (%s %s / Android %s)",
 		ident.Serial, ident.Brand, ident.Model, ident.OSVersion)
 
+	// Auto-apply saved spoof profile on boot
+	go autoApplySpoofOnBoot()
+
 	// Create agent client
 	agent := &AgentClient{
 		ServerAddr: *serverAddr,
