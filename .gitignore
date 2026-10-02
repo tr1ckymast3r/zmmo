@@ -6,6 +6,8 @@ dist/
 manager-agent/manager-agent
 packages/manager-agent/manager-agent
 backups/
+packages/manager-agent/zmmo-manager-agent
+zmmo-manager-agent
 .env
 .env.local
 .turbo/

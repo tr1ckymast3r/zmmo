@@ -54,9 +54,8 @@ type AgentClient struct {
 
 func (c *AgentClient) Connect() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.done = make(chan struct{})
+	c.mu.Unlock()
 
 	u := url.URL{
 		Scheme: "ws",
@@ -73,7 +72,10 @@ func (c *AgentClient) Connect() error {
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
+
+	c.mu.Lock()
 	c.conn = conn
+	c.mu.Unlock()
 
 	// Send registration
 	regMsg := AgentMessage{

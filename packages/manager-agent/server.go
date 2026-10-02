@@ -702,7 +702,7 @@ func handleDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	subPath := ""
 	if len(parts) > 1 {
-		subPath = parts[1]
+		subPath = strings.Join(parts[1:], "/")
 	}
 	switch {
 	case r.Method == "GET" && subPath == "":
